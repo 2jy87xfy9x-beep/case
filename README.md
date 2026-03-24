@@ -1,9 +1,42 @@
 # Landlord Case Organizer – README
 *A private ADHD‑friendly case organizer for building a landlord dispute before speaking to a lawyer.*
 
+<details id="quick-start">
+<summary><strong>Quick start</strong></summary>
+
+### Setup
+
+1. **Prerequisites:** [Node.js](https://nodejs.org/) (LTS recommended).
+2. **Install:** from the repo root, run `npm install`.
+
+### Commands
+
+| Command | What it does |
+|--------|----------------|
+| `npm test` | Run the full Vitest suite once. |
+| `npm run test:watch` | Re-run tests on file changes. |
+| `npm run dev:ui` | Start the Vite dev server for the web UI (`web/`). |
+| `npm run build:ui` | Production build of the web UI. |
+
+### Repo layout (high level)
+
+- **`app/`** — domain logic, application use cases, storage adapters, OCR/message ports.
+- **`web/`** — browser UI entry and Vite config.
+- **`tests/`** — Vitest specs mirroring `app/`.
+
+### Documentation
+
+Product and roadmap live under [`docs/`](docs/). Good entry points:
+
+- [Design spec v2](docs/specs/landlord_case_organizer_design_spec_v2.md)
+- [MVP TDD plan v2](docs/plans/landlord_mvp_tdd_v2.plan.md)
+
+</details>
+
 ---
 
 # 📌 Navigation
+- [Quick start](#quick-start)
 - [Purpose](#purpose)
 - [Who This Is For](#who-this-is-for)
 - [Goals](#goals)

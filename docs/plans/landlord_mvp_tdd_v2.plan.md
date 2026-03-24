@@ -1018,7 +1018,18 @@ _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 9](#nav-phase-9) · Nex
 <details open>
 <summary><strong>Completion checklist — intro</strong></summary>
 
-Implementation status reflects the repo as of the last plan update (domain/application/tests; **no React UI yet** — Phase 7–8 items below include application wiring callable from UI). Adjust checkboxes when scope changes.
+Implementation status reflects the repo as of the last plan update (domain/application/tests; **MVP UI is a Vite + vanilla TS shell** under [`web/`](../../web/) — Phase 8 React surfaces remain future work). Adjust checkboxes when scope changes.
+
+</details>
+
+<details open>
+<summary><strong>MVP web UI (evidence category + export)</strong></summary>
+
+<a id="nav-checklist-web-ui"></a>
+
+- [x] Evidence detail: category control calls [`setEvidenceCategory`](../../app/domain/evidenceOps.ts), merges returned `Case` into app state (evidence array replaced), persists with [`saveEvidence`](../../app/ports/CaseRepository.ts) — [`web/main.ts`](../../web/main.ts)
+- [x] Export: [`loadCase`](../../app/storage/IndexedDbCaseRepository.ts) assembles case, [`exportCaseMarkdown`](../../app/application/exportCase.ts) produces Markdown and updates `lastExportedAt`, client downloads the Markdown string — [`web/main.ts`](../../web/main.ts); dev: `npm run dev:ui`, production assets: `npm run build:ui` → `dist/web/`
+- [x] Export reminder banner (non-blocking) driven by [`needsExportReminder`](../../app/domain/exportReminder.ts) — [`web/main.ts`](../../web/main.ts)
 
 </details>
 
@@ -1033,7 +1044,7 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 - [x] `needsExportReminder` pure function written and tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts)
 - [x] `detectGaps` pure function written and tested with seed rule set — [`gapDetector.ts`](../../app/domain/gapDetector.ts), [`gapDetector.test.ts`](../../tests/domain/gapDetector.test.ts); see [Phase 5](#nav-phase-5)
 - [x] Timeline builder handles mixed `Evidence[]` and `Message[]` inputs — [`timeline.ts`](../../app/domain/timeline.ts)
-- [x] `Evidence.category` for gap rules — [`types.ts`](../../app/domain/types.ts); **set category (immutable case update):** [`evidenceOps.ts`](../../app/domain/evidenceOps.ts) (`setEvidenceCategory`); React evidence detail screen: [Phase 8](#nav-phase-8)
+- [x] `Evidence.category` for gap rules — [`types.ts`](../../app/domain/types.ts); **set category (immutable case update):** [`evidenceOps.ts`](../../app/domain/evidenceOps.ts) (`setEvidenceCategory`); **wired in UI:** [`web/main.ts`](../../web/main.ts); React evidence detail (Phase 8): [Phase 8](#nav-phase-8)
 
 </details>
 
@@ -1083,8 +1094,9 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 
 - [x] `case.lastExportedAt` updated after every successful export — [`exportCase.ts`](../../app/application/exportCase.ts) (`exportCaseMarkdown` + [`markCaseExported`](../../app/domain/exportReminder.ts)); persistence via `CaseRepository.saveCase`
 - [x] Full case export includes Gaps section (only when `detectGaps` non-empty) — [`markdownExport.ts`](../../app/domain/markdownExport.ts) (`buildMarkdownExport`), tests in [`markdownExport.test.ts`](../../tests/domain/markdownExport.test.ts)
-- [x] Export reminder **pure function** tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts); **RTL / banner:** [Phase 8](#nav-phase-8)
+- [x] Export reminder **pure function** tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts); **banner in web UI:** [`web/main.ts`](../../web/main.ts); **RTL tests:** [Phase 8](#nav-phase-8)
 - [x] Lawyer packet variant (`export.lawyerSummary`) differs from full case export — same module; omits evidence list + communication log; still includes Gaps when applicable
+- [x] Export actions in UI call `exportCaseMarkdown` and download `.md` — [`web/main.ts`](../../web/main.ts)
 
 </details>
 

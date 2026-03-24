@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Case organizer — evidence & export</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Case organizer</h1>
+      <div class="top__actions">
+        <button type="button" id="btn-export-full" class="btn btn--primary">Export full case (.md)</button>
+        <button type="button" id="btn-export-summary" class="btn">Export lawyer summary (.md)</button>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status"></p>
+    <p id="export-reminder" class="banner banner--hidden" role="note"></p>
+
+    <main class="layout">
+      <section class="panel" aria-labelledby="evidence-list-heading">
+        <h2 id="evidence-list-heading">Evidence</h2>
+        <ul id="evidence-list" class="evidence-list"></ul>
+      </section>
+      <section class="panel panel--detail" aria-labelledby="detail-heading">
+        <h2 id="detail-heading">Detail</h2>
+        <div id="detail-empty" class="muted">Select an evidence item.</div>
+        <div id="detail-body" class="detail-body detail-body--hidden">
+          <h3 id="detail-title"></h3>
+          <p class="muted" id="detail-meta"></p>
+          <label class="field">
+            <span class="field__label">Category</span>
+            <select id="detail-category" aria-label="Evidence category"></select>
+          </label>
+          <pre id="detail-text" class="detail-text"></pre>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
