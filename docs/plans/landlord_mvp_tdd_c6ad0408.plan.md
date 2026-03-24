@@ -1,6 +1,6 @@
 ---
 name: Landlord MVP TDD
-overview: A test-first roadmap for the Landlord Case Organizer MVP ([design spec](../specs/landlord_case_organizer_mvp_design_spec.md)), incorporating legal/product risk, NFRs, and delivery realism from [plan review follow-ups](../discussions/landlord_mvp_tdd_plan_review_followups.md). Stack — React, Vitest, RTL, IndexedDB, Tesseract.js, Markdown export.
+overview: A test-first roadmap for the Landlord Case Organizer MVP ([design spec](../specs/landlord_case_organizer_mvp_design_spec.md)), incorporating legal/product risk, NFRs, and delivery realism from [plan review follow-ups](../discussions/landlord_mvp_tdd_plan_review_followups.md). Stack — React, Vitest, RTL, IndexedDB, Tesseract.js, Markdown export. Architecture — loosely coupled layers with **ports** and **application** orchestration; **stable ids + human names** for all domain entities and for **UI/product surfaces** (screens, actions, flows, gates).
 todos:
   - id: phase-0-vitest
     content: "Phase 0: Add Vitest + RTL + jsdom; first smoke test proves runner."
@@ -15,7 +15,7 @@ todos:
     content: "Phase 3: TDD Tesseract wrapper (mocked unit); provenance fields; errors/timeouts."
     status: pending
   - id: phase-4-pipeline
-    content: "Phase 4: TDD upload→OCR→evidence; file limits/types/sanitization; preserve originals + optional hash."
+    content: "Phase 4: TDD application orchestration upload→OCR→evidence via ports; file limits/types/sanitization; preserve originals + optional hash."
     status: pending
   - id: phase-5-categorize
     content: "Phase 5: TDD rule-based categorization; copy framed as organization aid (UPL-safe UX)."
@@ -57,9 +57,72 @@ Follow red–green–refactor for every behavior: **write one failing test → r
 
 Prefer **behavior-focused tests** on real modules (pure domain, storage adapter, export builder). Mock **only** boundaries that are slow or non-deterministic (e.g. Tesseract in unit tests). Add a **contract or smoke** path that exercises real OCR (or a real fixture image) so shipped behavior is not only mocks — see [Testing strategy and definition of done](#testing-strategy-and-definition-of-done).
 
+## Architecture: loose coupling and layers
+
+The app stays **loosely coupled** by depending on **ports** (interfaces), not concrete IndexedDB, Tesseract, or browser APIs outside infrastructure.
+
+| Layer | Responsibility | May import from |
+| ----- | ---------------- | --------------- |
+| **Domain** | Entities, value objects, invariants, pure transforms (timeline, validation, categorization rules) | Standard library / self only — **no** storage, OCR, React, or browser globals |
+| **Application** | Use cases / orchestration (e.g. upload → OCR → persist evidence); **defines** the ports it needs | Domain + port **types** |
+| **Infrastructure** | IndexedDB adapter, Tesseract wrapper, file/blob helpers | Domain types; **implements** ports |
+| **Presentation** | React UI; maps user actions to application commands; reads view models / DTOs | Application API (or a thin facade) — **not** direct `app/storage/` or `app/ocr/` |
+
+**Dependency rule**: inner layers never depend on outer ones; **application** orchestrates via **ports**; tests inject fakes at those boundaries.
+
+```mermaid
+flowchart TB
+  subgraph presentation[Presentation]
+    UI[React_UI]
+  end
+  subgraph application[Application]
+    UC[Use_cases_orchestration]
+  end
+  subgraph domain[Domain]
+    DM[Types_rules_pure_functions]
+  end
+  subgraph infrastructure[Infrastructure]
+    IDB[IndexedDB_adapter]
+    OCR[OCR_wrapper]
+  end
+  Ports[Port_interfaces]
+  UI --> UC
+  UC --> DM
+  UC --> Ports
+  IDB --> Ports
+  OCR --> Ports
+```
+
+## Identity and naming (domain and UI)
+
+**Domain and persisted data**
+
+- Every **first-class entity** (case, evidence, claim, legal note, tag, taxonomy entry such as suggested categories, export preset if modeled) has a **stable opaque `id`** (e.g. UUID) and a **user-facing `name` / `title` / `displayName`** where the product needs human labeling.
+- **Relationships use ids only** — renaming must not break links. Export and UI resolve ids to display strings at render or export time.
+- **Enums / taxonomies**: model **`id` + `displayName`** (or code + label) in domain types so export, UI, and tests stay aligned.
+- **Tests**: assert round-trip **ids**; add cases where **rename** does not duplicate or orphan linked entities.
+
+**UI and product surfaces** (features, screens, flows)
+
+Give **stable machine ids** and **display names or copy keys** to everything that constitutes navigable UI and feature behavior (one vocabulary for logs, analytics, RTL, and optional `data-testid`).
+
+| Kind | Machine id (examples) | Human side |
+| ---- | --------------------- | ---------- |
+| Feature | `feature.uploadEvidence`, `feature.exportMarkdown` | In-app title / description |
+| Screen | `screen.caseDashboard`, `screen.exportPreview` | Page / section title |
+| Nav / tab | `nav.timeline`, `tab.claims` | Tab label |
+| Action | `action.addEvidence`, `action.dismissOnboarding` | Button or menu text |
+| Onboarding step | `onboarding.step.createCase`, `onboarding.step.addFirstDoc` | Step heading + body |
+| Glossary | `glossary.claim`, `glossary.evidence` | Term + explainer |
+| Gate | `gate.preExportAcknowledgment` | Acknowledgment copy |
+| Export variant | `export.fullCase`, `export.timelineOnly` | Selector label |
+| Empty / error | `empty.noEvidence`, `error.ocrFailed` | Message or i18n key |
+
+**Guardrails**: ids cover **product-meaningful** surfaces (primary flows, gates, major states) — not every DOM node. Prefer a **single registry** (`as const` maps / typed unions under e.g. `app/product-surface/` or beside `app/application/`). RTL: prefer `getByRole` + accessible name; when `data-testid` is needed, derive values from the same constants.
+
 ## Cross-cutting themes (from review)
 
-The roadmap optimizes for **test discipline** and **clean layering** but must also explicitly cover:
+The roadmap optimizes for **test discipline** and **clean layering** (see [Architecture: loose coupling and layers](#architecture-loose-coupling-and-layers)) but must also explicitly cover:
 
 1. **Legal / product risk** — what the product must not imply; how exports and OCR affect user decisions in disputes.
 2. **Non-functional requirements** — security, storage evolution, browser constraints, accessibility.
@@ -123,21 +186,54 @@ Internal **product legal memo** (even if non-binding) before calling the MVP shi
 
 Defer (not in MVP list): PDF/HTML export, share link, GitHub sync, schema UI editor, full image cleanup pipeline — add tests only when pulled into scope.
 
+## Novice UX — stable surface ids (examples)
+
+Map major UX themes to **machine ids** so RTL, snapshots, analytics, and `data-testid` (when used) stay aligned with [Identity and naming (domain and UI)](#identity-and-naming-domain-and-ui).
+
+| Theme | Stable id(s) (examples) | Where to test |
+| ----- | ------------------------- | ------------- |
+| Onboarding / mental model | `onboarding.flow.firstRun`, `onboarding.step.createCase`, `onboarding.step.addFirstDoc` | Phase 8 RTL |
+| Glossary | `glossary.term.claim`, `glossary.term.evidence`, `glossary.term.timeline` | Phase 8 component tests |
+| First export gate | `gate.preExportAcknowledgment` | Phase 8 state + RTL |
+| Tech / save clarity | `screen.settingsStorage`, `copy.localOnlyWarning` | Phase 8 RTL |
+| Gentle OCR failure | `error.ocrFailed` (UI), pipeline `userMessage` code aligned in Phases 3–4 | Phase 3–4 unit |
+| Photo / evidence quality | `help.photoTips`, `label.originalUpload`, `label.extractedText` | Phase 8 RTL |
+| Lawyer handoff | `screen.exportPreview`, `export.sectionOrder.*` matching Markdown section ids | Phase 7–8 |
+| ADHD helpers | `helper.nextBestStep`, `helper.sessionRecap` | Phase 8 reducer + RTL |
+
 ## Suggested repo layout (tests co-located or `__tests__`)
 
-Align with the spec’s [File Structure](../specs/landlord_case_organizer_mvp_design_spec.md) and keep **domain + export + storage testable without the UI**:
+Align with the spec’s [File Structure](../specs/landlord_case_organizer_mvp_design_spec.md) and keep **domain + export + persistence testable without the UI**:
 
-- `app/domain/` — types, validation, timeline derivation, categorization helpers
-- `app/storage/` — IndexedDB implementation behind a small interface
-- `app/ocr/` — Tesseract wrapper
-- `app/export/` — Markdown generators per export shape
-- `app/components/`, `app/modules/` — React UI
+- `app/domain/` — types, validation, timeline derivation, categorization helpers (no I/O)
+- `app/ports/` — TypeScript interfaces: `CaseRepository`, `OcrService`, optional `Clock`, `IdGenerator`, file picker, etc.
+- `app/application/` — use cases / orchestration (upload → OCR → evidence, load/save case); depends only on domain + ports
+- `app/storage/` — IndexedDB **implementation** of persistence ports
+- `app/ocr/` — Tesseract **implementation** of OCR port
+- `app/export/` — Markdown generators per export shape (pure; may sit at domain edge or application-facing API)
+- `app/product-surface/` (or colocated constants) — stable **screen / action / flow / gate** ids + optional copy map keyed by id
+- `app/components/`, `app/modules/` — React UI; wire to **application** layer, not to `storage`/`ocr` directly
 
 Use **Vitest** + **@testing-library/react**; **fake-indexeddb** (or equivalent) for IndexedDB in Node. Document **fake-indexeddb vs real browser** gaps; if CI shims fail, add **Playwright storage smoke** as fallback.
 
 ## Implementation order (dependency-first)
 
 Each phase is a sequence of **small tests** (one behavior per test name). Complete the full cycle per test before starting the next.
+
+**Phase ↔ primary layer**
+
+| Phase | Primary layer |
+| ----- | ------------- |
+| 0 | Tooling (all) |
+| 1 | Domain (+ identity / taxonomy id+name in types) |
+| 2 | Infrastructure (implements persistence **ports**) |
+| 3 | Infrastructure (implements OCR **port**) |
+| 4 | **Application** (orchestration; inject storage + OCR ports — no domain imports from infra) |
+| 5 | Domain (pure rules; categories as **id + displayName**) |
+| 6 | Domain + infrastructure via ports |
+| 7 | Domain / application-facing pure export (no React) |
+| 8 | Presentation (+ **product-surface** ids; optional light tests that critical ids exist) |
+| 9 | End-to-end (validates wired stack) |
 
 ```mermaid
 flowchart LR
@@ -170,6 +266,8 @@ flowchart LR
 
 Cover structures from the spec: **Evidence** (`id`, `type`, `date`, `tags`, extracted text, notes, source reference); **Claim** (title, description, related evidence, related law, strength, status); **Legal note** (topic, summary, source, applies-to-case, questions, confidence).
 
+**Identity**: **Case** and every persisted child entity has **`id` + user-facing name/title** where applicable; **tags** and taxonomy entries use **`id` + `displayName`**. **Links** (claim → evidence, note → claim) store **entity ids only** — add tests that **renaming** a case or evidence **does not** break relations.
+
 Example tests:
 
 - Creating a case and adding evidence updates state as specified.
@@ -179,8 +277,9 @@ Example tests:
 
 ### Phase 2 — IndexedDB storage adapter
 
+- Declare persistence contracts in **`app/ports/`** (e.g. `CaseRepository`); **implementation** lives in `app/storage/` only.
 - **Version** the IndexedDB schema; **migration tests** from version N to N+1; explicit behavior when **upgrade fails** (user messaging + test expectation).
-- Define a narrow interface (`loadCase`, `saveCase`, `addEvidence`, …) and test against **fake IndexedDB**.
+- Define the port’s narrow methods (`loadCase`, `saveCase`, `addEvidence`, …) and test the **adapter** against **fake IndexedDB**.
 - **RED / GREEN**: persist then load; deep equality on domain graph.
 - **Corrupt payload**: pick one behavior (**reject with clear error**, **quarantine key**, or **reset with backup**) — document it and TDD that path; do not leave “reject or migrate” undecided.
 - **CI**: document shim limitations; add Playwright storage smoke if Node IndexedDB behavior diverges.
@@ -192,17 +291,19 @@ Example tests:
 - **NFR checklist** (tests or manual gate where automated is impractical): WASM/workers, memory, **timeouts**, language packs; **CSP** (`worker-src`, etc.).
 - Distinguish **test flakiness** from **production UX**: partial failure, retry, user-visible messaging — specify expected behavior and test what is deterministic (e.g. retry count policy as pure function).
 
-### Phase 4 — Upload → evidence slice (application service)
+### Phase 4 — Upload → evidence (application orchestration)
+
+This phase is **application** layer: orchestrates domain factories with **injected** `OcrService` + `CaseRepository` (or equivalent) ports — **no** imports of concrete `app/ocr/` or `app/storage/` from domain.
 
 - **Uploads — security and integrity**: **file size cap**, **allowed MIME/types**, sane handling of **file names** (sanitization, path traversal rejected); confirm **bytes stay on device** if that is the privacy promise.
 - **Integrity (optional but stakeholder-driven)**: **content hash** linking evidence to original blob vs derived text — TDD hash computation and storage fields if required.
 - **RED**: given a `File` (image), after process, evidence has `extractedText` from mocked OCR, **original preserved**, stable `sourceFile` id/name.
-- **GREEN**: orchestration only: read file → OCR → build evidence → storage (inject mock storage in tests).
+- **GREEN**: orchestration only: read file → OCR port → build evidence → persistence port (inject **mock** OCR + storage in tests).
 
 ### Phase 5 — Categorization / smart detection (MVP-simple)
 
-- **RED**: e.g. `"Rent will increase to $885"` → suggested category `Rent Increase` (or enum).
-- **GREEN**: keyword/regex table; extend with tests per supported category.
+- **RED**: e.g. `"Rent will increase to $885"` → suggested category as **`id` + `displayName`** (e.g. `rent_increase` / “Rent increase”), not a raw string as the only key.
+- **GREEN**: keyword/regex table keyed by category **id**; extend with tests per supported category.
 - **Copy framing**: UI and exports present suggestions as **user organization**, not legal classification — align strings with legal review.
 
 ### Phase 6 — Claims and legal notes
@@ -222,16 +323,20 @@ Tests mirror [Legal Knowledge Organizer](../specs/landlord_case_organizer_mvp_de
 
 ### Phase 8 — React UI (RTL), mission-control layout
 
+Introduce or extend **`app/product-surface/`** (or equivalent): **screen**, **action**, **flow**, and **gate** ids as `as const` / typed unions; optional **copy map** keyed by id. Wire components to **application** use cases, not to IndexedDB or Tesseract directly.
+
 **Suggested build order** (adjust if product dictates):
 
-1. App shell + case switcher / empty state  
-2. Evidence + upload entry points  
-3. Timeline view  
+1. App shell + case switcher / empty state (`screen.appShell`, `empty.noCases`, …)  
+2. Evidence + upload entry points (`action.addEvidence`, …)  
+3. Timeline view (`screen.timeline`, `nav.timeline`, …)  
 4. Claims  
 5. Law notes  
-6. Export trigger + preview  
+6. Export trigger + preview (`screen.exportPreview`, `export.fullCase`, `export.timelineOnly`, …)  
 
 For each: **RED** with providers/fakes; assert labels, navigation, actions (e.g. upload invokes handler with `File`). **GREEN**: minimal components.
+
+**Preview / export alignment**: section order in the preview UI should use the same **section ids** as the Markdown export builder where applicable — one test path (Phase 7 + 8) avoids preview/export drift.
 
 **Accessibility**: WCAG-oriented tests for **focus mode** and **progress tracker** — focus order, visible focus, `aria-*` / live regions where needed, **keyboard** paths without mouse.
 
@@ -253,6 +358,13 @@ For each: **RED** with providers/fakes; assert labels, navigation, actions (e.g.
 - Every new function/module has tests **observed failing** first.
 - Mocks only at I/O boundaries; assertions describe contracts or user-visible behavior.
 - Full suite green; no ignored failures.
+
+**Architecture and identity**
+
+- **Layering**: domain has **no** imports from storage, OCR, or React; UI does **not** import `app/storage/` or `app/ocr/` directly — only **application** + **ports**.
+- **Ports**: persistence and OCR exposed as interfaces in `app/ports/`; **infrastructure** implements them; tests use fakes.
+- **Domain identity**: every spec entity has **`id` + name/title** as required; relations by **id**; rename tests where applicable.
+- **Product surface**: new primary screen, flow step, gate, or export mode adds a **stable surface id** (+ label or copy key) in the shared registry; RTL/`data-testid` derives from those constants when needed.
 
 **Merged action items** (from follow-ups)
 
