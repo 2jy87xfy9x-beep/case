@@ -16,12 +16,17 @@ export interface Message {
 
 export type OcrMethod = 'vision' | 'tesseract' | 'manual' | 'cloud';
 
+/** User- or review-assigned bucket for gap detection and export (Phase 5). */
+export type EvidenceCategory = 'lease' | 'payment' | 'rent-notice' | 'fee-notice' | 'other';
+
 export interface Evidence {
   id: string;
   dateTime: Date;
   title: string;
   body: string;
   requiresUserReview: boolean;
+  /** When unset, the item is treated as uncategorized for gap rules. */
+  category?: EvidenceCategory;
   provenance: {
     tier: OcrMethod;
     extractedAt: Date;

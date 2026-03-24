@@ -162,6 +162,9 @@ decisions_required_before_build:
 
 _<a href="#nav-top">↑ On this page</a> · Next: [Principles](#nav-principles)_
 
+<details open>
+<summary><strong>v1 → v2 scope comparison</strong></summary>
+
 Design spec v2 introduced six material changes that break alignment with the
 original plan. This document patches each one surgically. Unchanged phases from
 v1 are noted but not re-specified here; consult the original plan for their
@@ -177,6 +180,8 @@ full content.
 | Gap detection | Not mentioned | Case Builder surfaces likely-missing items | Phase 5 expanded |
 | Lawyer / consultation prep | "Optional MVP" | Full data model in spec | Decision gate added |
 
+</details>
+
 ---
 
 <a id="nav-principles"></a>
@@ -185,10 +190,15 @@ full content.
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [What changed](#nav-what-changed) · Next: [Architecture](#nav-architecture)_
 
+<details open>
+<summary><strong>TDD principles</strong></summary>
+
 Red–green–refactor for every behavior. No production code without a prior
 failing test. Behavior-focused tests on real modules. Mock only slow or
 non-deterministic boundaries. Add a contract/smoke path for real OCR so
 shipped behavior is not only mocks.
+
+</details>
 
 ---
 
@@ -197,6 +207,9 @@ shipped behavior is not only mocks.
 ## Architecture decision (record here before build)
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Principles](#nav-principles) · Next: [Phase 0](#nav-phase-0)_
+
+<details open>
+<summary><strong>Ports/adapters rationale (ADR-001)</strong></summary>
 
 Resolve `decision.architecture-complexity` before writing any code. The
 recommendation is to keep ports/adapters with this rationale written into
@@ -209,6 +222,8 @@ recommendation is to keep ports/adapters with this rationale written into
 > cost. The spec v2 critique is acknowledged and this decision is recorded
 > explicitly so it is not silently revisited.
 
+</details>
+
 ---
 
 <a id="nav-phase-0"></a>
@@ -217,7 +232,12 @@ recommendation is to keep ports/adapters with this rationale written into
 
 _<a href="#nav-top">↑ On this page</a> · Next: [Phase 1](#nav-phase-1)_
 
+<details open>
+<summary><strong>Phase 0 notes</strong></summary>
+
 No changes. Proceed as specified in v1 plan.
+
+</details>
 
 ---
 
@@ -227,7 +247,13 @@ No changes. Proceed as specified in v1 plan.
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 0](#nav-phase-0) · Next: [Phase 2](#nav-phase-2)_
 
+<details>
+<summary><strong>Phase 1 — domain entities, timeline, export fields</strong> (expand)</summary>
+
 All v1 content applies. The following additions are required.
+
+<details>
+<summary><strong>1a — Message entity</strong></summary>
 
 ### 1a. Add Message entity
 
@@ -263,6 +289,11 @@ interface Message {
 - Messages from the same `threadId` can be grouped and retrieved as a thread
 - Renaming a thread (changing the display label, not the id) does not break any linked evidence or claims
 
+</details>
+
+<details>
+<summary><strong>1b — lastExportedAt on Case</strong></summary>
+
 ### 1b. Add lastExportedAt to Case
 
 The export-as-backup behavior (Phase 7) requires knowing when the user last
@@ -283,6 +314,11 @@ interface Case {
 - `needsExportReminder(case: Case, now: Date): boolean` returns `true` when
   `lastExportedAt` is null or more than 7 days before `now`
 - Returns `false` when last export was within 7 days
+
+</details>
+
+<details>
+<summary><strong>1c — Gap type</strong></summary>
 
 ### 1c. Gap detection types
 
@@ -320,6 +356,8 @@ interface Lawyer {
 If the decision is "post-MVP", add a `TODO` comment referencing the deferred
 decision and skip Lawyer from all Phase 1 tests.
 
+</details>
+
 ---
 
 <a id="nav-phase-2"></a>
@@ -328,10 +366,15 @@ decision and skip Lawyer from all Phase 1 tests.
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 1](#nav-phase-1) · Next: [Phase 3](#nav-phase-3)_
 
+<details open>
+<summary><strong>Phase 2 — IndexedDB schema & migration</strong></summary>
+
 No changes to structure or test strategy. Extend the schema to include the
 `messages` object store and the new `lastExportedAt` field on cases when
 Phase 1 additions are complete. Write a migration test from the v1 schema
 (without `messages` store) to the v2 schema (with it).
+
+</details>
 
 ---
 
@@ -340,6 +383,9 @@ Phase 1 additions are complete. Write a migration test from the v1 schema
 ## Phase 3 — OCR wrapper ← REWRITTEN
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 2](#nav-phase-2) · Next: [Phase 3.5](#nav-phase-3-5)_
+
+<details>
+<summary><strong>Phase 3 — tiered OCR port & implementations</strong> (expand)</summary>
 
 The v1 plan specified a single Tesseract.js wrapper. This phase now defines
 a **tiered OCR port** that the rest of the system depends on, plus
@@ -443,6 +489,8 @@ Manual entry is not a fallback — it is an equally valid input path. The
 - The upload pipeline (Phase 4) handles a manual-tier result the same way
   it handles any other tier — no special casing in orchestration
 
+</details>
+
 ---
 
 <a id="nav-phase-3-5"></a>
@@ -450,6 +498,9 @@ Manual entry is not a fallback — it is an equally valid input path. The
 ## Phase 3.5 — Text message import ← NEW PHASE
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 3](#nav-phase-3) · Next: [Phase 4](#nav-phase-4)_
+
+<details>
+<summary><strong>Phase 3.5 — CSV/XML parsers & import orchestration</strong> (expand)</summary>
 
 This phase is entirely new. It sits between Phase 3 (OCR) and Phase 4
 (upload pipeline) because text message import is higher priority than OCR
@@ -536,6 +587,8 @@ Phase 3. No additional parser needed. The user reviews OCR output and
 manually corrects sender attribution. This path produces `Message` entities
 with `importSource: 'screenshot-ocr'` and `requiresUserReview: true`.
 
+</details>
+
 ---
 
 <a id="nav-phase-4"></a>
@@ -543,6 +596,9 @@ with `importSource: 'screenshot-ocr'` and `requiresUserReview: true`.
 ## Phase 4 — Upload → evidence pipeline ← MODIFIED
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 3.5](#nav-phase-3-5) · Next: [Phase 5](#nav-phase-5)_
+
+<details>
+<summary><strong>Phase 4 — upload pipeline & image prep</strong> (expand)</summary>
 
 All v1 content applies. The following modifications are required.
 
@@ -582,6 +638,8 @@ async function prepareImageForOcr(file: File): Promise<File>
   fixture image with known EXIF)
 - File without EXIF → returned unchanged
 - Pipeline calls `prepareImageForOcr` before calling `OcrService.extractText`
+
+</details>
 
 ---
 
@@ -647,6 +705,8 @@ Add to the surface registry:
 'section.caseGaps'   // the UI section that renders gap suggestions
 ```
 
+</details>
+
 ---
 
 <a id="nav-phase-6"></a>
@@ -655,12 +715,17 @@ Add to the surface registry:
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 5](#nav-phase-5) · Next: [Phase 7](#nav-phase-7)_
 
+<details open>
+<summary><strong>Phase 6 — claims & legal notes</strong></summary>
+
 **Gate: `gate.claimsModuleLegalReview` must be cleared before this phase
 begins.** See `decisions_required_before_build` for how to clear it. Do not
 write claims module UI copy until this gate is resolved.
 
 No structural changes. Confirm that claim and legal note domain tests link
 to v2 spec section headings (not v1), since section anchors may have changed.
+
+</details>
 
 ---
 
@@ -669,6 +734,12 @@ to v2 spec section headings (not v1), since section anchors may have changed.
 ## Phase 7 — Export ← MODIFIED
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 6](#nav-phase-6) · Next: [Phase 8](#nav-phase-8) · [Checklist: export](#nav-checklist-export)_
+
+<details>
+<summary><strong>Phase 7 — export variants, Markdown, reminders</strong> (expand)</summary>
+
+<details>
+<summary><strong>Lawyer packet vs backup contexts</strong></summary>
 
 V1 covered Markdown export as a lawyer packet. V2 elevates export to serve
 two distinct purposes: **lawyer packet** and **data backup**. These use the
@@ -684,6 +755,11 @@ and reminder logic.
 
 Both contexts produce the same file format. The distinction is in the UI
 trigger and the `lastExportedAt` update.
+
+</details>
+
+<details>
+<summary><strong>Reminder logic & Phase 7 tests</strong></summary>
 
 ### Reminder logic (pure function — already typed in Phase 1)
 
@@ -713,6 +789,11 @@ UI layer reads `needsExportReminder` to decide whether to show the banner.
   extracted or manually entered text only."
 - Export does not throw if `lastExportedAt` is null
 
+</details>
+
+<details>
+<summary><strong>Export variants & text-only MVP format</strong></summary>
+
 ### Export variants (update from v1)
 
 Add `export.lawyerSummary` as a distinct variant from `export.fullCase`.
@@ -727,6 +808,10 @@ your device and are the authoritative source. This export contains extracted
 or manually entered text only." This disclaimer is required in every export
 variant and must be tested in Phase 7 snapshot/string tests.
 
+</details>
+
+</details>
+
 ---
 
 <a id="nav-phase-8"></a>
@@ -734,6 +819,12 @@ variant and must be tested in Phase 7 snapshot/string tests.
 ## Phase 8 — React UI ← MODIFIED
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 7](#nav-phase-7) · Next: [Phase 9](#nav-phase-9) · [Checklist: platform / QA](#nav-checklist-platform)_
+
+<details>
+<summary><strong>Phase 8 — React UI, surfaces, RTL tests, QA gate</strong> (expand)</summary>
+
+<details>
+<summary><strong>Mobile-first build order</strong></summary>
 
 ### Mobile-first build order
 
@@ -755,6 +846,11 @@ build sequence to reflect this:
 7. **Export + backup banner** (`screen.exportPreview`, `banner.exportReminder`)
 8. **Consultation prep** (`screen.consultationPrep`) — if Lawyer entity is in
    MVP scope per decision.lawyer-entity-mvp
+
+</details>
+
+<details>
+<summary><strong>New surface ids (v2 registry)</strong></summary>
 
 ### New surface ids (additions to v1 registry)
 
@@ -783,6 +879,11 @@ build sequence to reflect this:
 'action.addLawyerContact'
 ```
 
+</details>
+
+<details>
+<summary><strong>Message import UI & RTL tests</strong></summary>
+
 ### Message import UI
 
 Add the message import flow to the Quick Add menu:
@@ -809,6 +910,11 @@ Quick Add options:
   a link to the timeline
 - Imported messages appear in the timeline view interleaved with evidence
 
+</details>
+
+<details>
+<summary><strong>Export reminder banner (RTL)</strong></summary>
+
 ### Export reminder banner
 
 The `banner.exportReminder` renders when `needsExportReminder` returns `true`.
@@ -820,6 +926,11 @@ The `banner.exportReminder` renders when `needsExportReminder` returns `true`.
 - "Export now" button triggers export and dismisses the banner
 - "Dismiss" button dismisses the banner for the current session (does not
   update `lastExportedAt`)
+
+</details>
+
+<details>
+<summary><strong>Evidence review — OCR accuracy warning (RTL)</strong></summary>
 
 ### Evidence review UI — tiered OCR warnings
 
@@ -838,6 +949,11 @@ surface ids.
 - Evidence with `tier: 'manual'` does not show the warning
 - Confirming the extracted text sets `requiresUserReview: false` on the
   evidence record
+
+</details>
+
+<details>
+<summary><strong>Mobile QA gate (manual)</strong></summary>
 
 ### Mobile QA gate (manual, not automated)
 
@@ -860,6 +976,10 @@ Before any release, perform manual QA on a real iPhone (not simulator):
 
 This gate must be green before tagging any release candidate. See also [Completion checklist → Platform](#nav-checklist-platform).
 
+</details>
+
+</details>
+
 ---
 
 <a id="nav-phase-9"></a>
@@ -868,9 +988,14 @@ This gate must be green before tagging any release candidate. See also [Completi
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 8](#nav-phase-8) · Next: [Completion checklist](#nav-completion-checklist)_
 
+<details open>
+<summary><strong>Phase 9 — Playwright E2E</strong></summary>
+
 No structural changes. Expand the happy path to include one message import
 step: create case → upload fixture → import fixture CSV → evidence and
 messages visible in timeline.
+
+</details>
 
 ---
 
@@ -880,7 +1005,12 @@ messages visible in timeline.
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 9](#nav-phase-9) · Next: [Deferred](#nav-deferred)_
 
-Implementation status reflects the repo as of the last plan update (domain/application/tests; **no React UI yet**). Adjust checkboxes when scope changes.
+<details open>
+<summary><strong>Completion checklist — intro</strong></summary>
+
+Implementation status reflects the repo as of the last plan update (domain/application/tests; **no React UI yet** — Phase 7–8 items below include application wiring callable from UI). Adjust checkboxes when scope changes.
+
+</details>
 
 <details open>
 <summary><strong>Domain additions</strong></summary>
@@ -893,7 +1023,7 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 - [x] `needsExportReminder` pure function written and tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts)
 - [x] `detectGaps` pure function written and tested with seed rule set — [`gapDetector.ts`](../../app/domain/gapDetector.ts), [`gapDetector.test.ts`](../../tests/domain/gapDetector.test.ts); see [Phase 5](#nav-phase-5)
 - [x] Timeline builder handles mixed `Evidence[]` and `Message[]` inputs — [`timeline.ts`](../../app/domain/timeline.ts)
-- [x] `Evidence.category` for gap rules — [`types.ts`](../../app/domain/types.ts); UI to set categories: [Phase 8](#nav-phase-8)
+- [x] `Evidence.category` for gap rules — [`types.ts`](../../app/domain/types.ts); **set category (immutable case update):** [`evidenceOps.ts`](../../app/domain/evidenceOps.ts) (`setEvidenceCategory`); React evidence detail screen: [Phase 8](#nav-phase-8)
 
 </details>
 
@@ -941,10 +1071,10 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 
 <a id="nav-checklist-export"></a>
 
-- [ ] `case.lastExportedAt` updated after every successful export (orchestration + persistence; domain helper exists — [`markCaseExported`](../../app/domain/exportReminder.ts))
-- [ ] Full case export includes Gaps section — [Phase 7](#nav-phase-7)
+- [x] `case.lastExportedAt` updated after every successful export — [`exportCase.ts`](../../app/application/exportCase.ts) (`exportCaseMarkdown` + [`markCaseExported`](../../app/domain/exportReminder.ts)); persistence via `CaseRepository.saveCase`
+- [x] Full case export includes Gaps section (only when `detectGaps` non-empty) — [`markdownExport.ts`](../../app/domain/markdownExport.ts) (`buildMarkdownExport`), tests in [`markdownExport.test.ts`](../../tests/domain/markdownExport.test.ts)
 - [x] Export reminder **pure function** tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts); **RTL / banner:** [Phase 8](#nav-phase-8)
-- [ ] Lawyer packet variant (`export.lawyerSummary`) differs from full case export
+- [x] Lawyer packet variant (`export.lawyerSummary`) differs from full case export — same module; omits evidence list + communication log; still includes Gaps when applicable
 
 </details>
 
@@ -987,6 +1117,9 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Completion checklist](#nav-completion-checklist)_
 
+<details>
+<summary><strong>Post-MVP / out-of-scope list</strong></summary>
+
 - Apple Vision OCR (Tier 1) — requires Capacitor wrapper; port is ready,
   infrastructure module not implemented
 - Cloud OCR (Tier 4) — stub the interface, do not implement
@@ -1000,7 +1133,12 @@ _<a href="#nav-top">↑ On this page</a> · Prev: [Completion checklist](#nav-co
 - Full lawyer search tracker
 - Schema editor / user-extensible fields
 
+</details>
+
 ---
+
+<details>
+<summary><strong>Document notes</strong> (living plan / version)</summary>
 
 *This plan is a living document. Update it as open questions resolve and new
 information surfaces. All decisions in `decisions_required_before_build`
@@ -1008,3 +1146,5 @@ must be resolved and recorded before the relevant phase begins.*
 
 *Version: v2 — drafted as surgical update to landlord_mvp_tdd_c6ad0408.plan.md,
 aligned with design spec v2.*
+
+</details>

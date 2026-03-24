@@ -75,6 +75,26 @@ describe('CaseRepository port behavior with in-memory fake', () => {
     expect((await repo.listEvidence(caseData.id))[0].id).toBe('e1');
     expect((await repo.listMessages(caseData.id))[0].id).toBe('m1');
   });
+
+  it('round-trips evidence.category on the port', async () => {
+    const repo = new InMemoryCaseRepository();
+    const caseData = createCase({ id: 'c-cat', title: 'Cat case' });
+    const evidence: Evidence[] = [
+      {
+        id: 'e-lease',
+        dateTime: new Date('2026-01-01T00:00:00Z'),
+        title: 'Lease',
+        body: 'Terms',
+        requiresUserReview: false,
+        category: 'lease',
+        provenance: { tier: 'manual', extractedAt: new Date('2026-01-01T00:00:00Z') }
+      }
+    ];
+    await repo.saveCase(caseData);
+    await repo.saveEvidence(caseData.id, evidence);
+    const loaded = await repo.listEvidence(caseData.id);
+    expect(loaded[0].category).toBe('lease');
+  });
 });
 
 describe('IndexedDbCaseRepository smoke', () => {

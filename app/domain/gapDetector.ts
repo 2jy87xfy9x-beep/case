@@ -1,61 +1,79 @@
-import type { Case, Gap } from './types.js';
+import type { Case, Evidence, Gap } from './types.js';
 
-const POSITIVE_EVIDENCE_PATTERNS = {
-  lease: /\blease\b/i,
-  payment: /\b(payment|receipt|rent paid|bank transfer)\b/i,
-  rentIncrease: /\b(rent increase|increase notice|new rent|raised rent)\b/i
-};
+const RENT_INCREASE_KEYWORDS = /\b(rent increase|increase notice|new rent|raised rent)\b/i;
 
 function hasConfirmedDate(value: Date): boolean {
   return Number.isFinite(value.getTime());
 }
 
+function itemText(e: Evidence): string {
+  return `${e.title} ${e.body}`;
+}
+
+function hasCategory(caseData: Case, category: Evidence['category']): boolean {
+  return caseData.evidence.some((e) => e.category === category);
+}
+
+function hasRentOrFeeNotice(caseData: Case): boolean {
+  return hasCategory(caseData, 'rent-notice') || hasCategory(caseData, 'fee-notice');
+}
+
+function hasRentIncreaseText(caseData: Case): boolean {
+  return caseData.evidence.some((e) => RENT_INCREASE_KEYWORDS.test(itemText(e)));
+}
+
+/**
+ * Positive-evidence-only gap detection: only flags when existing evidence
+ * implies something else should exist (see plan Phase 5).
+ */
 export function detectGaps(caseData: Case): Gap[] {
-  const hasAnyData = caseData.evidence.length > 0 || caseData.messages.length > 0;
-  if (!hasAnyData) {
+  if (caseData.evidence.length === 0) {
     return [];
   }
 
   const gaps: Gap[] = [];
 
-  const evidenceText = caseData.evidence.map((item) => `${item.title} ${item.body}`);
-
-  if (!evidenceText.some((text) => POSITIVE_EVIDENCE_PATTERNS.lease.test(text))) {
+  if (hasRentOrFeeNotice(caseData) && !hasCategory(caseData, 'lease')) {
     gaps.push({
       id: 'gap.missingLease',
-      displayName: 'Missing lease document',
-      description: 'Add a lease copy or photos so baseline terms are available.',
+      displayName: 'No lease or rental agreement found',
+      description:
+        'You added a rent-related or fee notice. Adding the lease or rental agreement helps tie those items together.',
       severity: 'notable'
     });
   }
 
-  if (!evidenceText.some((text) => POSITIVE_EVIDENCE_PATTERNS.payment.test(text))) {
+  if (hasCategory(caseData, 'fee-notice') && !hasCategory(caseData, 'payment')) {
     gaps.push({
       id: 'gap.missingPaymentRecord',
-      displayName: 'Missing payment record',
-      description: 'Add a rent receipt, bank transfer, or payment confirmation.',
+      displayName: 'No payment records found',
+      description:
+        'A fee notice is on file. Payment receipts or transfer records help show what was paid.',
       severity: 'suggested'
     });
   }
 
-  if (!evidenceText.some((text) => POSITIVE_EVIDENCE_PATTERNS.rentIncrease.test(text))) {
+  if (hasRentIncreaseText(caseData) && !hasCategory(caseData, 'rent-notice')) {
     gaps.push({
       id: 'gap.missingRentIncreaseNotice',
-      displayName: 'Missing rent increase notice',
-      description: 'Add written notice showing when and how rent changed.',
+      displayName: 'Possible rent increase — no formal notice found',
+      description:
+        'Something mentions a rent increase, but nothing is marked as a formal rent-increase notice.',
       severity: 'suggested'
     });
   }
 
-  const hasDateEvidence = caseData.evidence.some((item) => hasConfirmedDate(item.dateTime));
-  const hasDateMessages = caseData.messages.some((item) => hasConfirmedDate(item.dateTime));
-  if (!hasDateEvidence && !hasDateMessages) {
-    gaps.push({
-      id: 'gap.noConfirmedDates',
-      displayName: 'No confirmed dates',
-      description: 'Add at least one message or document with a concrete date.',
-      severity: 'notable'
-    });
+  const { evidence } = caseData;
+  if (evidence.length >= 3) {
+    const withoutConfirmedDate = evidence.filter((e) => !hasConfirmedDate(e.dateTime)).length;
+    if (withoutConfirmedDate * 2 > evidence.length) {
+      gaps.push({
+        id: 'gap.noConfirmedDates',
+        displayName: 'Most documents have no confirmed date — adding dates helps build your timeline',
+        description: 'More than half of your evidence items need a confirmed date for a clearer timeline.',
+        severity: 'notable'
+      });
+    }
   }
 
   return gaps;

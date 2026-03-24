@@ -1,86 +1,154 @@
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../../app/domain/factories.js';
 import { detectGaps } from '../../app/domain/gapDetector.js';
-import type { Evidence, Message } from '../../app/domain/types.js';
+import type { Evidence } from '../../app/domain/types.js';
+import { GAP_SURFACE_IDS } from '../../app/product-surface/ids.js';
 
-function baseEvidence(overrides: Partial<Evidence>): Evidence {
+function evidence(overrides: Partial<Evidence> & Pick<Evidence, 'id'>): Evidence {
   return {
-    id: 'e1',
     dateTime: new Date('2026-01-01T00:00:00Z'),
     title: 'Document',
-    body: 'General case notes',
+    body: 'Body text',
     requiresUserReview: false,
     provenance: { tier: 'manual', extractedAt: new Date('2026-01-01T00:00:00Z') },
     ...overrides
   };
 }
 
-function baseMessage(overrides: Partial<Message>): Message {
-  return {
-    id: 'm1',
-    threadId: 't1',
-    dateTime: new Date('2026-01-01T00:00:00Z'),
-    sender: 'landlord',
-    direction: 'received',
-    body: 'Message',
-    importSource: 'manual',
-    tags: [],
-    notes: '',
-    ...overrides
-  };
-}
-
-describe('detectGaps seed rules', () => {
-  it('empty case baseline returns no gaps', () => {
-    const caseData = createCase({ id: 'c-empty', title: 'Empty' });
+describe('detectGaps (Phase 5 — positive-evidence-only)', () => {
+  it('returns empty array when there is no evidence, even if messages exist', () => {
+    const caseData = createCase({ id: 'c0', title: 'Messages only' });
+    caseData.messages = [
+      {
+        id: 'm1',
+        threadId: 't1',
+        dateTime: new Date('2026-01-02T00:00:00Z'),
+        sender: 'landlord',
+        direction: 'received',
+        body: 'Rent due',
+        importSource: 'sms-xml',
+        tags: [],
+        notes: ''
+      }
+    ];
     expect(detectGaps(caseData)).toEqual([]);
   });
 
-  it('gap.missingLease triggers without lease and does not trigger with lease evidence', () => {
-    const noLease = createCase({ id: 'c1', title: 'No lease' });
-    noLease.evidence = [baseEvidence({ title: 'Payment receipt', body: 'rent paid' })];
-    noLease.messages = [baseMessage({})];
-
-    const withLease = createCase({ id: 'c2', title: 'With lease' });
-    withLease.evidence = [baseEvidence({ title: 'Signed Lease', body: 'Apartment terms' })];
-
-    expect(detectGaps(noLease).map((gap) => gap.id)).toContain('gap.missingLease');
-    expect(detectGaps(withLease).map((gap) => gap.id)).not.toContain('gap.missingLease');
+  it('case with rent-notice but no lease-tagged evidence returns gap.missingLease', () => {
+    const caseData = createCase({ id: 'c1', title: 'Rent notice only' });
+    caseData.evidence = [
+      evidence({
+        id: 'e1',
+        category: 'rent-notice',
+        title: 'Rent notice',
+        body: 'February rent amount'
+      })
+    ];
+    const gaps = detectGaps(caseData);
+    expect(gaps.map((g) => g.id)).toContain('gap.missingLease');
   });
 
-  it('gap.missingPaymentRecord triggers without payment and does not trigger with payment evidence', () => {
-    const noPayment = createCase({ id: 'c3', title: 'No payment' });
-    noPayment.evidence = [baseEvidence({ title: 'Lease', body: 'terms only' })];
-    noPayment.messages = [baseMessage({})];
-
-    const withPayment = createCase({ id: 'c4', title: 'With payment' });
-    withPayment.evidence = [baseEvidence({ title: 'Bank transfer receipt', body: 'January rent paid' })];
-
-    expect(detectGaps(noPayment).map((gap) => gap.id)).toContain('gap.missingPaymentRecord');
-    expect(detectGaps(withPayment).map((gap) => gap.id)).not.toContain('gap.missingPaymentRecord');
+  it('case with lease and rent notice does not return gap.missingLease', () => {
+    const caseData = createCase({ id: 'c2', title: 'Complete' });
+    caseData.evidence = [
+      evidence({ id: 'e1', category: 'lease', title: 'Lease', body: 'Terms' }),
+      evidence({ id: 'e2', category: 'rent-notice', title: 'Notice', body: 'Rent' })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).not.toContain('gap.missingLease');
   });
 
-  it('gap.missingRentIncreaseNotice triggers without notice and does not trigger with notice evidence', () => {
-    const noNotice = createCase({ id: 'c5', title: 'No notice' });
-    noNotice.evidence = [baseEvidence({ title: 'Lease', body: 'annual agreement' })];
-    noNotice.messages = [baseMessage({})];
-
-    const withNotice = createCase({ id: 'c6', title: 'With notice' });
-    withNotice.evidence = [baseEvidence({ title: 'Rent increase notice', body: 'new rent starts May 1' })];
-
-    expect(detectGaps(noNotice).map((gap) => gap.id)).toContain('gap.missingRentIncreaseNotice');
-    expect(detectGaps(withNotice).map((gap) => gap.id)).not.toContain('gap.missingRentIncreaseNotice');
+  it('fee notice without payment-tagged evidence returns gap.missingPaymentRecord', () => {
+    const caseData = createCase({ id: 'c3', title: 'Fee' });
+    caseData.evidence = [
+      evidence({ id: 'e1', category: 'fee-notice', title: 'Late fee', body: 'Fee assessed' })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).toContain('gap.missingPaymentRecord');
   });
 
-  it('gap.noConfirmedDates triggers when no valid dates and does not trigger with confirmed date', () => {
-    const noDates = createCase({ id: 'c7', title: 'No dates' });
-    noDates.evidence = [baseEvidence({ dateTime: new Date('invalid') })];
-    noDates.messages = [baseMessage({ dateTime: new Date('invalid') })];
+  it('fee notice with payment-tagged evidence does not return gap.missingPaymentRecord', () => {
+    const caseData = createCase({ id: 'c4', title: 'Fee + pay' });
+    caseData.evidence = [
+      evidence({ id: 'e1', category: 'fee-notice', title: 'Fee', body: 'Due' }),
+      evidence({ id: 'e2', category: 'payment', title: 'Receipt', body: 'Paid' })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).not.toContain('gap.missingPaymentRecord');
+  });
 
-    const withDate = createCase({ id: 'c8', title: 'With dates' });
-    withDate.messages = [baseMessage({ dateTime: new Date('2026-01-05T00:00:00Z') })];
+  it('rent increase keywords in text without rent-notice category returns gap.missingRentIncreaseNotice', () => {
+    const caseData = createCase({ id: 'c5', title: 'Informal' });
+    caseData.evidence = [
+      evidence({
+        id: 'e1',
+        category: 'other',
+        title: 'Email',
+        body: 'Landlord said there will be a rent increase next month.'
+      })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).toContain('gap.missingRentIncreaseNotice');
+  });
 
-    expect(detectGaps(noDates).map((gap) => gap.id)).toContain('gap.noConfirmedDates');
-    expect(detectGaps(withDate).map((gap) => gap.id)).not.toContain('gap.noConfirmedDates');
+  it('rent increase text with rent-notice item does not return gap.missingRentIncreaseNotice', () => {
+    const caseData = createCase({ id: 'c6', title: 'Formal' });
+    caseData.evidence = [
+      evidence({
+        id: 'e1',
+        category: 'rent-notice',
+        title: 'Official notice',
+        body: 'Rent increase effective June 1'
+      })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).not.toContain('gap.missingRentIncreaseNotice');
+  });
+
+  it('gap.noConfirmedDates when more than half of 3+ evidence items lack confirmed dates', () => {
+    const caseData = createCase({ id: 'c7', title: 'Dates' });
+    caseData.evidence = [
+      evidence({ id: 'a', dateTime: new Date('invalid'), category: 'other', body: 'x' }),
+      evidence({ id: 'b', dateTime: new Date('invalid'), category: 'other', body: 'y' }),
+      evidence({ id: 'c', dateTime: new Date('2026-02-01T00:00:00Z'), category: 'other', body: 'z' })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).toContain('gap.noConfirmedDates');
+  });
+
+  it('gap.noConfirmedDates does not fire when at least half of evidence has confirmed dates', () => {
+    const caseData = createCase({ id: 'c8', title: 'Ok dates' });
+    caseData.evidence = [
+      evidence({ id: 'a', dateTime: new Date('2026-01-01T00:00:00Z'), category: 'other', body: 'x' }),
+      evidence({ id: 'b', dateTime: new Date('2026-01-02T00:00:00Z'), category: 'other', body: 'y' }),
+      evidence({ id: 'c', dateTime: new Date('invalid'), category: 'other', body: 'z' })
+    ];
+    expect(detectGaps(caseData).map((g) => g.id)).not.toContain('gap.noConfirmedDates');
+  });
+
+  it('every returned gap has non-empty id, displayName, and description', () => {
+    const caseData = createCase({ id: 'c9', title: 'Many gaps' });
+    caseData.evidence = [
+      evidence({
+        id: 'e1',
+        category: 'fee-notice',
+        title: 'Fee',
+        body: 'rent increase mentioned in fee letter'
+      })
+    ];
+    for (const gap of detectGaps(caseData)) {
+      expect(gap.id.length).toBeGreaterThan(0);
+      expect(gap.displayName.trim().length).toBeGreaterThan(0);
+      expect(gap.description.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('detectGaps is pure (same input → same output)', () => {
+    const caseData = createCase({ id: 'c10', title: 'Pure' });
+    caseData.evidence = [
+      evidence({ id: 'e1', category: 'rent-notice', title: 'N', body: 'Rent due' })
+    ];
+    const a = JSON.stringify(detectGaps(caseData));
+    const b = JSON.stringify(detectGaps(caseData));
+    expect(a).toBe(b);
+  });
+
+  it('registers gap-related surface ids from product-surface/ids', () => {
+    expect(GAP_SURFACE_IDS).toContain('gap.missingLease');
+    expect(GAP_SURFACE_IDS).toContain('section.caseGaps');
   });
 });
