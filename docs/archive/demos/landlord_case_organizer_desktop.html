@@ -1,0 +1,572 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.desktop-frame {
+  width: 100%;
+  min-height: 580px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.desktop-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  flex-shrink: 0;
+}
+.dt-case-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+.dt-case-sub { font-size: 11px; color: var(--color-text-secondary); }
+.dt-export-btn {
+  font-size: 12px;
+  color: var(--color-text-info);
+  border: 0.5px solid var(--color-border-info);
+  border-radius: var(--border-radius-md);
+  padding: 5px 12px;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-sans);
+}
+
+.desktop-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+}
+.sidebar-item.active {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.sidebar-item:hover:not(.active) { background: var(--color-background-secondary); }
+.sidebar-icon { font-size: 14px; width: 18px; text-align: center; }
+
+.sidebar-section {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 12px 16px 4px;
+}
+
+.main-workspace {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 0.5px solid var(--color-border-tertiary);
+}
+
+.details-panel {
+  width: 220px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 16px 14px;
+}
+
+.dp-label { font-size: 10px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; margin-top: 14px; }
+.dp-label:first-child { margin-top: 0; }
+.dp-value { font-size: 13px; color: var(--color-text-primary); line-height: 1.5; }
+.dp-muted { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+.tag-notice { background: var(--color-background-warning); color: var(--color-text-warning); }
+.tag-lease { background: var(--color-background-info); color: var(--color-text-info); }
+.tag-payment { background: var(--color-background-success); color: var(--color-text-success); }
+.tag-comm { background: var(--color-background-secondary); color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); }
+.tag-unreviewed { background: var(--color-background-danger); color: var(--color-text-danger); }
+
+.section-header {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 14px 16px 6px;
+}
+.evidence-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  cursor: pointer;
+}
+.evidence-item:hover, .evidence-item.selected { background: var(--color-background-secondary); }
+.evidence-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.evidence-body { flex: 1; min-width: 0; }
+.evidence-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+.evidence-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 1px; }
+
+.timeline-item {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+}
+.tl-spine { display: flex; flex-direction: column; align-items: center; width: 14px; flex-shrink: 0; }
+.tl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--color-border-secondary); flex-shrink: 0; margin-top: 4px; }
+.tl-dot.notice { background: #BA7517; }
+.tl-dot.payment { background: #3B6D11; }
+.tl-dot.message { background: #185FA5; }
+.tl-line { flex: 1; width: 1px; background: var(--color-border-tertiary); }
+.tl-body { flex: 1; padding-bottom: 10px; }
+.tl-date { font-size: 11px; color: var(--color-text-secondary); }
+.tl-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-top: 1px; }
+.tl-desc { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; line-height: 1.4; }
+
+.claim-card {
+  margin: 8px 12px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.claim-card:hover, .claim-card.selected { border-color: var(--color-border-info); }
+.claim-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+.claim-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 3px; line-height: 1.5; }
+.claim-footer { display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.status-pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; }
+.status-researching { background: var(--color-background-warning); color: var(--color-text-warning); }
+.status-ready { background: var(--color-background-success); color: var(--color-text-success); }
+.linked-count { font-size: 11px; color: var(--color-text-secondary); }
+
+.nudge-banner {
+  margin: 10px 12px;
+  background: var(--color-background-warning);
+  border: 0.5px solid var(--color-border-warning);
+  border-radius: var(--border-radius-md);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--color-text-warning);
+}
+
+.progress-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 16px;
+}
+.metric-card {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 8px 10px;
+}
+.metric-label { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 3px; }
+.metric-val { font-size: 18px; font-weight: 500; color: var(--color-text-primary); }
+
+.screen-tabs {
+  display: flex;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  padding: 0 16px;
+  gap: 4px;
+}
+.screen-tab {
+  padding: 8px 10px 7px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+.screen-tab.active { color: var(--color-text-info); border-bottom-color: var(--color-border-info); font-weight: 500; }
+
+.ocr-review-row {
+  display: flex;
+  gap: 12px;
+  margin: 10px 12px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+.ocr-img-block {
+  width: 110px;
+  flex-shrink: 0;
+  background: var(--color-background-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+.ocr-text-block { flex: 1; padding: 12px 12px 12px 0; }
+.ocr-label { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.ocr-warning { font-size: 11px; color: var(--color-text-warning); margin-bottom: 6px; }
+.ocr-body { font-size: 12px; color: var(--color-text-primary); background: var(--color-background-secondary); padding: 7px 9px; border-radius: var(--border-radius-md); line-height: 1.6; }
+.ocr-actions { display: flex; gap: 6px; margin-top: 8px; }
+.btn-confirm { padding: 5px 12px; font-size: 12px; font-weight: 500; background: var(--color-background-success); color: var(--color-text-success); border: 0.5px solid var(--color-border-success); border-radius: var(--border-radius-md); cursor: pointer; font-family: var(--font-sans); }
+.btn-edit { padding: 5px 12px; font-size: 12px; background: none; color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); cursor: pointer; font-family: var(--font-sans); }
+
+.dp-divider { height: 0.5px; background: var(--color-border-tertiary); margin: 14px 0 0; }
+
+.question-item { padding: 8px 0; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 12px; color: var(--color-text-primary); display: flex; gap: 8px; }
+.q-mark { color: var(--color-text-secondary); flex-shrink: 0; }
+
+.msg-row { display: flex; gap: 8px; padding: 5px 12px; align-items: flex-start; }
+.msg-row.sent { flex-direction: row-reverse; }
+.bubble { max-width: 200px; padding: 6px 10px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+.bubble.received { background: var(--color-background-secondary); color: var(--color-text-primary); border-bottom-left-radius: 3px; }
+.bubble.sent { background: var(--color-background-info); color: var(--color-text-info); border-bottom-right-radius: 3px; }
+.msg-meta { font-size: 10px; color: var(--color-text-secondary); padding-top: 3px; }
+.msg-sender { font-size: 10px; color: var(--color-text-secondary); margin-bottom: 2px; }
+.thread-label { font-size: 10px; color: var(--color-text-secondary); text-align: center; padding: 6px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+
+.disclaimer { font-size: 11px; color: var(--color-text-secondary); padding: 10px 16px; line-height: 1.5; border-top: 0.5px solid var(--color-border-tertiary); }
+
+.ws-screen { display: none; }
+.ws-screen.active { display: block; }
+</style>
+
+<div style="padding: 0.5rem 0 1.5rem;">
+
+<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+  <button onclick="showWS('inbox')" id="wb-inbox" style="font-size: 11px; padding: 4px 10px; background: var(--color-background-info); color: var(--color-text-info); border: 0.5px solid var(--color-border-info); border-radius: 99px; cursor: pointer; font-family: var(--font-sans); font-weight: 500;">Inbox</button>
+  <button onclick="showWS('timeline')" id="wb-timeline" style="font-size: 11px; padding: 4px 10px; background: none; color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: 99px; cursor: pointer; font-family: var(--font-sans);">Timeline</button>
+  <button onclick="showWS('evidence')" id="wb-evidence" style="font-size: 11px; padding: 4px 10px; background: none; color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: 99px; cursor: pointer; font-family: var(--font-sans);">Evidence</button>
+  <button onclick="showWS('law')" id="wb-law" style="font-size: 11px; padding: 4px 10px; background: none; color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: 99px; cursor: pointer; font-family: var(--font-sans);">Law</button>
+  <button onclick="showWS('export')" id="wb-export" style="font-size: 11px; padding: 4px 10px; background: none; color: var(--color-text-secondary); border: 0.5px solid var(--color-border-secondary); border-radius: 99px; cursor: pointer; font-family: var(--font-sans);">Export</button>
+</div>
+
+<div class="desktop-frame">
+
+  <div class="desktop-topbar">
+    <div>
+      <div class="dt-case-name">123 Main St dispute</div>
+      <div class="dt-case-sub">Landlord: J. Smith · Month-to-month · Started Sep 2023</div>
+    </div>
+    <button class="dt-export-btn">Export ↑</button>
+  </div>
+
+  <div class="desktop-body">
+
+    <div class="sidebar">
+      <button class="sidebar-item active" id="si-inbox" onclick="showWS('inbox')"><span class="sidebar-icon">📥</span>Inbox</button>
+      <button class="sidebar-item" id="si-timeline" onclick="showWS('timeline')"><span class="sidebar-icon">📅</span>Timeline</button>
+      <button class="sidebar-item" id="si-evidence" onclick="showWS('evidence')"><span class="sidebar-icon">🗂️</span>Evidence</button>
+      <button class="sidebar-item" id="si-law" onclick="showWS('law')"><span class="sidebar-icon">⚖️</span>Law</button>
+      <button class="sidebar-item" id="si-export" onclick="showWS('export')"><span class="sidebar-icon">📤</span>Export</button>
+    </div>
+
+    <div class="main-workspace" id="main-workspace">
+
+      <div class="ws-screen active" id="ws-inbox">
+        <div class="progress-row">
+          <div class="metric-card"><div class="metric-label">uploaded</div><div class="metric-val">7</div></div>
+          <div class="metric-card"><div class="metric-label">reviewed</div><div class="metric-val">4</div></div>
+          <div class="metric-card"><div class="metric-label">claims</div><div class="metric-val">2</div></div>
+          <div class="metric-card"><div class="metric-label">last export</div><div class="metric-val" style="font-size: 13px; margin-top: 2px;">3 days ago</div></div>
+        </div>
+        <div class="nudge-banner">3 items in inbox — want to review one?</div>
+        <div class="section-header">Needs review</div>
+        <div class="ocr-review-row" style="cursor:pointer;" onclick="selectItem('rent-notice')">
+          <div class="ocr-img-block">🖼</div>
+          <div class="ocr-text-block">
+            <div class="ocr-label">Extracted text (Tesseract)</div>
+            <div class="ocr-warning">Text extraction may be less accurate. Please review carefully.</div>
+            <div class="ocr-body">"Notice of rent increase effective March 1. New monthly rent: $2,100. Previous: $1,850."</div>
+            <div class="ocr-actions">
+              <button class="btn-confirm">Confirm text</button>
+              <button class="btn-edit">Edit</button>
+            </div>
+          </div>
+        </div>
+        <div class="evidence-item" onclick="selectItem('photo-uncaptioned')">
+          <div class="evidence-thumb">📷</div>
+          <div class="evidence-body">
+            <div class="evidence-title">Photo — no caption yet</div>
+            <div class="evidence-meta">Added today · No date set</div>
+            <span class="tag tag-unreviewed">unreviewed</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ws-screen" id="ws-timeline">
+        <div class="section-header">All events, oldest first</div>
+        <div class="timeline-item" onclick="selectItem('lease')">
+          <div class="tl-spine"><div class="tl-dot payment"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">Sep 1, 2023</div><div class="tl-title">Lease signed — $1,850/mo</div><div class="tl-desc">Fixed term, 12 months</div></div>
+        </div>
+        <div class="timeline-item" onclick="selectItem('text-jan')">
+          <div class="tl-spine"><div class="tl-dot message"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">Jan 14, 2024</div><div class="tl-title">Text — landlord re: late fee</div><div class="tl-desc">"I'm adding a $150 late fee to next month's rent."</div></div>
+        </div>
+        <div class="timeline-item" onclick="selectItem('rent-notice')">
+          <div class="tl-spine"><div class="tl-dot notice"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">Feb 3, 2024</div><div class="tl-title">Rent increase notice received</div><div class="tl-desc">$1,850 → $2,100 effective March 1</div></div>
+        </div>
+        <div class="timeline-item" onclick="selectItem('payment-mar')">
+          <div class="tl-spine"><div class="tl-dot payment"></div></div>
+          <div class="tl-body" style="padding-bottom:0;"><div class="tl-date">Mar 1, 2024</div><div class="tl-title">Payment — $2,100</div><div class="tl-desc">Bank record uploaded</div></div>
+        </div>
+        <div style="margin: 10px 12px; background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; font-size: 12px; color: var(--color-text-secondary);">2 items have no date — tap to assign</div>
+      </div>
+
+      <div class="ws-screen" id="ws-evidence">
+        <div class="screen-tabs">
+          <button class="screen-tab active" onclick="switchTab(this,'ev-docs','ev-msgs')">Documents</button>
+          <button class="screen-tab" onclick="switchTab(this,'ev-msgs','ev-docs')">Messages</button>
+        </div>
+        <div id="ev-docs">
+          <div class="evidence-item" onclick="selectItem('lease')"><div class="evidence-thumb">📄</div><div class="evidence-body"><div class="evidence-title">Lease agreement</div><div class="evidence-meta">Sep 1, 2023</div><span class="tag tag-lease">lease</span></div></div>
+          <div class="evidence-item" onclick="selectItem('rent-notice')"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Rent increase notice</div><div class="evidence-meta">Feb 3, 2024 · OCR confirmed</div><span class="tag tag-notice">rent notice</span></div></div>
+          <div class="evidence-item" onclick="selectItem('payment-mar')"><div class="evidence-thumb">🧾</div><div class="evidence-body"><div class="evidence-title">Bank statement — Mar</div><div class="evidence-meta">Mar 1, 2024</div><span class="tag tag-payment">payment record</span></div></div>
+          <div class="evidence-item" onclick="selectItem('photo-uncaptioned')"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Photo — no caption yet</div><div class="evidence-meta">No date set</div><span class="tag tag-unreviewed">unreviewed</span></div></div>
+        </div>
+        <div id="ev-msgs" style="display:none;">
+          <div class="thread-label">iMessage thread · imported via iMazing CSV</div>
+          <div class="msg-row"><div><div class="msg-sender">Landlord</div><div class="bubble received">Your rent is late. There will be a $150 fee added.</div><div class="msg-meta">Jan 14, 2024 · 9:43 AM</div></div></div>
+          <div class="msg-row sent"><div style="text-align:right;"><div class="bubble sent">I sent the payment on the 1st. Here's my confirmation.</div><div class="msg-meta">Jan 14, 2024 · 10:02 AM</div></div></div>
+          <div class="msg-row"><div><div class="msg-sender">Landlord</div><div class="bubble received">I'll look into it.</div><div class="msg-meta">Jan 14, 2024 · 11:15 AM</div></div></div>
+        </div>
+      </div>
+
+      <div class="ws-screen" id="ws-law">
+        <div class="screen-tabs">
+          <button class="screen-tab active" onclick="switchLaw(this,'law-claims','law-notes','law-questions')">Claims</button>
+          <button class="screen-tab" onclick="switchLaw(this,'law-notes','law-claims','law-questions')">Legal notes</button>
+          <button class="screen-tab" onclick="switchLaw(this,'law-questions','law-claims','law-notes')">Questions</button>
+        </div>
+        <div id="law-claims">
+          <div style="padding: 8px 12px 0; font-size: 11px; color: var(--color-text-secondary); line-height: 1.6;">These are topics to discuss with your lawyer, not conclusions about your case.</div>
+          <div class="claim-card" onclick="selectItem('claim-1')">
+            <div class="claim-title">Rent increase notice — possible timing issue</div>
+            <div class="claim-desc">Notice received Feb 3 for March 1 increase. Unsure if notice period is long enough under state law.</div>
+            <div class="claim-footer"><span class="status-pill status-researching">researching</span><span class="linked-count">2 evidence · 1 legal note</span></div>
+          </div>
+          <div class="claim-card" onclick="selectItem('claim-2')">
+            <div class="claim-title">Late fee — possible violation</div>
+            <div class="claim-desc">$150 late fee charged. Need to check if this exceeds the legal cap.</div>
+            <div class="claim-footer"><span class="status-pill status-ready">ready to discuss</span><span class="linked-count">1 evidence · 1 legal note</span></div>
+          </div>
+        </div>
+        <div id="law-notes" style="display:none;">
+          <div class="evidence-item"><div class="evidence-body"><div class="evidence-title">Rent increase notice requirements</div><div class="evidence-meta">Source: state tenant rights guide · Confidence: medium</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:5px;line-height:1.5;">Most states require 30 days written notice. Need to verify exact requirement for this state.</div><span class="tag tag-comm">linked: claim #1</span></div></div>
+          <div class="evidence-item"><div class="evidence-body"><div class="evidence-title">Late fee caps</div><div class="evidence-meta">Source: city housing code · Confidence: low</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:5px;line-height:1.5;">Some jurisdictions cap late fees at 5% of monthly rent. Need to verify locally.</div><span class="tag tag-comm">linked: claim #2</span></div></div>
+        </div>
+        <div id="law-questions" style="display:none;">
+          <div style="padding: 10px 16px 4px;">
+            <div class="question-item"><span class="q-mark">?</span><span>Was the 26-day notice period for my rent increase legal?</span></div>
+            <div class="question-item"><span class="q-mark">?</span><span>Is $150 within the legal late fee limit here?</span></div>
+            <div class="question-item"><span class="q-mark">?</span><span>Does the landlord need to provide receipts for fees charged?</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ws-screen" id="ws-export">
+        <div class="section-header">Export types</div>
+        <div class="evidence-item"><div class="evidence-thumb" style="font-size:18px;">📦</div><div class="evidence-body"><div class="evidence-title">Full case file</div><div class="evidence-meta">Everything · Lawyer packet / backup</div></div></div>
+        <div class="evidence-item"><div class="evidence-thumb" style="font-size:18px;">📋</div><div class="evidence-body"><div class="evidence-title">Lawyer summary</div><div class="evidence-meta">Claims, questions, key evidence</div></div></div>
+        <div class="evidence-item"><div class="evidence-thumb" style="font-size:18px;">📅</div><div class="evidence-body"><div class="evidence-title">Timeline only</div><div class="evidence-meta">Chronological event list</div></div></div>
+        <div class="evidence-item"><div class="evidence-thumb" style="font-size:18px;">❓</div><div class="evidence-body"><div class="evidence-title">Legal questions</div><div class="evidence-meta">All questions compiled</div></div></div>
+        <div class="section-header">Format</div>
+        <div style="display:flex;gap:8px;padding:8px 16px 12px;">
+          <button style="padding:6px 14px;font-size:12px;font-weight:500;background:var(--color-background-info);color:var(--color-text-info);border:0.5px solid var(--color-border-info);border-radius:var(--border-radius-md);cursor:pointer;font-family:var(--font-sans);">Markdown</button>
+          <button style="padding:6px 14px;font-size:12px;background:none;color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-family:var(--font-sans);">PDF</button>
+          <button style="padding:6px 14px;font-size:12px;background:none;color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-family:var(--font-sans);">HTML</button>
+        </div>
+        <div class="nudge-banner">No export in 3 days. Export a backup after each significant session.</div>
+        <div class="disclaimer">All exports include: "This document was prepared for organizational purposes only and does not constitute legal advice." OCR caveat included where applicable.</div>
+      </div>
+
+    </div>
+
+    <div class="details-panel" id="details-panel">
+      <div style="font-size: 12px; color: var(--color-text-secondary); line-height: 1.6;">Select an item to see notes, tags, and links here.</div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+const wsScreens = ['inbox','timeline','evidence','law','export'];
+
+const itemDetails = {
+  'rent-notice': {
+    title: 'Rent increase notice',
+    fields: [
+      ['Type', 'Photo'],
+      ['Category', 'Rent notice'],
+      ['Date', 'Feb 3, 2024'],
+      ['OCR method', 'Tesseract'],
+      ['Status', 'Confirmed'],
+    ],
+    tags: ['rent notice'],
+    notes: 'Received 26 days before effective date. Check notice period requirements.',
+    links: ['Claim: notice timing issue', 'Legal note: notice requirements']
+  },
+  'lease': {
+    title: 'Lease agreement',
+    fields: [
+      ['Type', 'PDF'],
+      ['Category', 'Lease'],
+      ['Date', 'Sep 1, 2023'],
+      ['OCR method', 'Manual'],
+    ],
+    tags: ['lease'],
+    notes: 'Original signed lease. Month-to-month after fixed term.',
+    links: ['Claim: notice timing issue']
+  },
+  'text-jan': {
+    title: 'Text — Jan 14 late fee',
+    fields: [
+      ['Type', 'Message'],
+      ['Sender', 'Landlord'],
+      ['Date', 'Jan 14, 2024 · 9:43 AM'],
+      ['Source', 'iMazing CSV'],
+    ],
+    tags: ['communication'],
+    notes: 'Landlord claims rent was late. Have payment confirmation from the 1st.',
+    links: ['Claim: late fee — possible violation']
+  },
+  'payment-mar': {
+    title: 'Bank statement — Mar',
+    fields: [
+      ['Type', 'Screenshot'],
+      ['Category', 'Payment record'],
+      ['Date', 'Mar 1, 2024'],
+      ['OCR method', 'Tesseract'],
+    ],
+    tags: ['payment record'],
+    notes: '',
+    links: []
+  },
+  'photo-uncaptioned': {
+    title: 'Photo — uncaptioned',
+    fields: [
+      ['Type', 'Photo'],
+      ['Category', 'Unassigned'],
+      ['Date', 'Not set'],
+      ['OCR method', 'Pending'],
+    ],
+    tags: ['unreviewed'],
+    notes: '',
+    links: []
+  },
+  'claim-1': {
+    title: 'Claim: notice timing',
+    fields: [
+      ['Status', 'Researching'],
+      ['Confidence', 'Low'],
+    ],
+    tags: [],
+    notes: 'Notice received Feb 3 for March 1. Need to verify state notice period law.',
+    links: ['Evidence: rent increase notice', 'Legal note: notice requirements']
+  },
+  'claim-2': {
+    title: 'Claim: late fee',
+    fields: [
+      ['Status', 'Ready to discuss'],
+      ['Confidence', 'Medium'],
+    ],
+    tags: [],
+    notes: '$150 fee charged. Verify cap under local code.',
+    links: ['Evidence: text Jan 14', 'Legal note: late fee caps']
+  }
+};
+
+function selectItem(id) {
+  const item = itemDetails[id];
+  if (!item) return;
+  const panel = document.getElementById('details-panel');
+  let html = `<div style="font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:12px;">${item.title}</div>`;
+  item.fields.forEach(([k,v]) => {
+    html += `<div class="dp-label">${k}</div><div class="dp-value">${v}</div>`;
+  });
+  if (item.tags.length) {
+    html += `<div class="dp-divider"></div><div class="dp-label" style="margin-top:12px;">Tags</div><div>`;
+    item.tags.forEach(t => { html += `<span class="tag tag-${t.replace(/\s/g,'-')}">${t}</span>`; });
+    html += '</div>';
+  }
+  if (item.notes !== '') {
+    html += `<div class="dp-divider"></div><div class="dp-label" style="margin-top:12px;">Notes</div><div class="dp-muted">${item.notes || '—'}</div>`;
+  }
+  if (item.links.length) {
+    html += `<div class="dp-divider"></div><div class="dp-label" style="margin-top:12px;">Linked to</div>`;
+    item.links.forEach(l => { html += `<div class="dp-muted" style="padding:2px 0;">↗ ${l}</div>`; });
+  }
+  panel.innerHTML = html;
+}
+
+function showWS(name) {
+  wsScreens.forEach(s => {
+    document.getElementById('ws-' + s).classList.remove('active');
+    document.getElementById('si-' + s).classList.remove('active');
+    const wb = document.getElementById('wb-' + s);
+    if (wb) { wb.style.background = 'none'; wb.style.color = 'var(--color-text-secondary)'; wb.style.fontWeight = ''; }
+  });
+  document.getElementById('ws-' + name).classList.add('active');
+  document.getElementById('si-' + name).classList.add('active');
+  const activeWb = document.getElementById('wb-' + name);
+  if (activeWb) { activeWb.style.background = 'var(--color-background-info)'; activeWb.style.color = 'var(--color-text-info)'; activeWb.style.fontWeight = '500'; }
+  document.getElementById('details-panel').innerHTML = '<div style="font-size:12px;color:var(--color-text-secondary);line-height:1.6;">Select an item to see notes, tags, and links here.</div>';
+}
+
+function switchTab(btn, showId, hideId) {
+  document.querySelectorAll('#ws-evidence .screen-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(showId).style.display = 'block';
+  document.getElementById(hideId).style.display = 'none';
+}
+
+function switchLaw(btn, showId, ...hideIds) {
+  document.querySelectorAll('#ws-law .screen-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  hideIds.forEach(id => document.getElementById(id).style.display = 'none');
+  document.getElementById(showId).style.display = 'block';
+}
+</script>

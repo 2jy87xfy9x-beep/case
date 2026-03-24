@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Landlord Case Organizer — Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:           #F5F3EE;
+    --surface:      #FFFFFF;
+    --surface-2:    #F0EDE7;
+    --border:       #E2DDD6;
+    --border-2:     #C8C3BB;
+    --text-primary: #1A1814;
+    --text-secondary: #6B6760;
+    --text-hint:    #A09C97;
+    --accent:       #2D5A3D;
+    --accent-light: #EAF2ED;
+    --accent-text:  #1E3D29;
+    --warn:         #7A4E1A;
+    --warn-light:   #FDF3E7;
+    --warn-border:  #E8C38A;
+    --danger:       #8B2020;
+    --danger-light: #FDF0F0;
+    --danger-border:#E8AAAA;
+    --ok:           #1A5C35;
+    --ok-light:     #EBF5EF;
+    --ok-border:    #96D4AD;
+    --info:         #1A3A5C;
+    --info-light:   #EBF1F8;
+    --info-border:  #96B8D4;
+    --radius-sm:    6px;
+    --radius-md:    10px;
+    --radius-lg:    14px;
+    --radius-xl:    20px;
+    --shadow-sm:    0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md:    0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --font-body:    'DM Sans', sans-serif;
+    --font-mono:    'DM Mono', monospace;
+    --transition:   150ms ease;
+  }
+
+  html, body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── View Toggle ── */
+  #view-toggle-btn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1000;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1.5px solid var(--border-2);
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition), transform var(--transition);
+  }
+  #view-toggle-btn:hover { background: var(--surface-2); transform: scale(1.05); }
+  #view-toggle-btn svg { width: 18px; height: 18px; }
+  #toggle-tooltip {
+    position: fixed;
+    top: 62px;
+    right: 12px;
+    background: var(--text-primary);
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--transition);
+    white-space: nowrap;
+    z-index: 1001;
+  }
+  #view-toggle-btn:hover + #toggle-tooltip { opacity: 1; }
+
+  /* ── Shared Utility ── */
+  .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 99px;
+    margin-right: 4px;
+    margin-top: 4px;
+  }
+  .tag-lease     { background: var(--info-light); color: var(--info); border: 1px solid var(--info-border); }
+  .tag-notice    { background: var(--warn-light); color: var(--warn); border: 1px solid var(--warn-border); }
+  .tag-payment   { background: var(--ok-light);   color: var(--ok);   border: 1px solid var(--ok-border); }
+  .tag-comm      { background: var(--surface-2);  color: var(--text-secondary); border: 1px solid var(--border); }
+  .tag-unreviewed{ background: var(--danger-light);color: var(--danger);border: 1px solid var(--danger-border); }
+
+  .status-pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 9px;
+    border-radius: 99px;
+  }
+  .status-researching { background: var(--warn-light); color: var(--warn); border: 1px solid var(--warn-border); }
+  .status-ready       { background: var(--ok-light);   color: var(--ok);   border: 1px solid var(--ok-border); }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-hint);
+    padding: 14px 18px 5px;
+  }
+
+  .nudge-banner {
+    margin: 10px 14px;
+    background: var(--warn-light);
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius-md);
+    padding: 9px 13px;
+    font-size: 12px;
+    color: var(--warn);
+    line-height: 1.5;
+  }
+
+  .disclaimer {
+    font-size: 11px;
+    color: var(--text-hint);
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    line-height: 1.6;
+  }
+
+  /* ── Metric Cards ── */
+  .metrics-grid {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .metric-card {
+    background: var(--surface-2);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+  }
+  .metric-card__label { font-size: 10px; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .metric-card__val   { font-size: 22px; font-weight: 300; color: var(--text-primary); }
+
+  /* ── Evidence Items ── */
+  .evidence-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .evidence-item:hover { background: var(--surface-2); }
+  .evidence-item.selected { background: var(--accent-light); }
+  .evidence-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .evidence-body { flex: 1; min-width: 0; }
+  .evidence-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .evidence-meta  { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+
+  /* ── OCR Review ── */
+  .ocr-card {
+    margin: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .ocr-img-block {
+    background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: var(--text-hint);
+  }
+  .ocr-text-block { padding: 12px; }
+  .ocr-method-label { font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-hint); margin-bottom: 3px; }
+  .ocr-warning { font-size: 11px; color: var(--warn); margin-bottom: 7px; }
+  .ocr-body {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--surface-2);
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    line-height: 1.6;
+    color: var(--text-primary);
+  }
+  .ocr-actions {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .btn-confirm {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--ok-light);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--transition);
+  }
+  .btn-confirm:hover { background: var(--ok-border); }
+  .btn-edit {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--transition);
+  }
+  .btn-edit:hover { background: var(--surface-2); }
+
+  /* ── Timeline ── */
+  .timeline-entry {
+    display: flex;
+    gap: 13px;
+    padding: 9px 18px;
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .timeline-entry:hover { background: var(--surface-2); }
+  .tl-spine { display: flex; flex-direction: column; align-items: center; width: 13px; flex-shrink: 0; }
+  .tl-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .tl-dot.payment { background: var(--ok); }
+  .tl-dot.notice  { background: var(--warn); }
+  .tl-dot.message { background: var(--info); }
+  .tl-dot.default { background: var(--border-2); }
+  .tl-line { flex: 1; width: 1px; background: var(--border); min-height: 14px; }
+  .tl-body { flex: 1; padding-bottom: 8px; }
+  .tl-date  { font-size: 10px; color: var(--text-hint); font-family: var(--font-mono); }
+  .tl-title { font-size: 13px; font-weight: 500; color: var(--text-primary); margin-top: 1px; }
+  .tl-desc  { font-size: 11px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+  .undated-pile {
+    margin: 8px 14px;
+    background: var(--surface-2);
+    border: 1px dashed var(--border-2);
+    border-radius: var(--radius-md);
+    padding: 9px 13px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  /* ── Claim Cards ── */
+  .claim-card {
+    margin: 8px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 13px 15px;
+    cursor: pointer;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    box-shadow: var(--shadow-sm);
+  }
+  .claim-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
+  .claim-card.selected { border-color: var(--accent); background: var(--accent-light); }
+  .claim-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .claim-desc  { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+  .claim-footer { display: flex; gap: 8px; margin-top: 9px; align-items: center; flex-wrap: wrap; }
+  .linked-count { font-size: 11px; color: var(--text-hint); }
+  .claims-disclaimer {
+    margin: 10px 14px 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--info-light);
+    border: 1px solid var(--info-border);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    line-height: 1.5;
+  }
+
+  /* ── Tabs (sub-screens) ── */
+  .screen-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 14px;
+    gap: 2px;
+    background: var(--surface);
+  }
+  .screen-tab {
+    padding: 9px 11px 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: var(--font-body);
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition: color var(--transition);
+  }
+  .screen-tab:hover { color: var(--text-primary); }
+  .screen-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+  /* ── Messages ── */
+  .thread-header {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--text-hint);
+    text-align: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .msg-row { display: flex; gap: 8px; padding: 5px 14px; align-items: flex-end; }
+  .msg-row.sent { flex-direction: row-reverse; }
+  .bubble { max-width: 240px; padding: 8px 11px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+  .bubble.received { background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .bubble.sent     { background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+  .msg-meta  { font-size: 10px; color: var(--text-hint); font-family: var(--font-mono); padding-top: 3px; }
+  .msg-sender{ font-size: 10px; color: var(--text-hint); margin-bottom: 2px; }
+
+  /* ── Export ── */
+  .export-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .export-option:hover { background: var(--surface-2); }
+  .export-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .export-body { flex: 1; }
+  .export-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .export-desc  { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .format-btns  { display: flex; gap: 7px; padding: 10px 18px 12px; }
+  .fmt-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-family: var(--font-body);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    border: 1px solid var(--border-2);
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+  }
+  .fmt-btn:hover  { background: var(--surface-2); }
+  .fmt-btn.active { background: var(--accent-light); color: var(--accent-text); border-color: var(--accent); font-weight: 500; }
+
+  /* ── Legal Notes ── */
+  .note-item {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .note-item:hover { background: var(--surface-2); }
+  .note-title { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+  .note-meta  { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  .note-body  { font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
+
+  /* ── Questions ── */
+  .question-item {
+    display: flex;
+    gap: 10px;
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .q-mark { color: var(--text-hint); font-weight: 500; flex-shrink: 0; margin-top: 1px; }
+  .q-text { font-size: 13px; color: var(--text-primary); line-height: 1.5; }
+
+  /* ─────────────────────────────────────────
+     MOBILE LAYOUT
+  ───────────────────────────────────────── */
+  #mobile-view {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 16px 40px;
+    background: var(--bg);
+  }
+
+  #mobile-frame {
+    width: 375px;
+    min-height: 720px;
+    background: var(--surface);
+    border-radius: 36px;
+    border: 1.5px solid var(--border-2);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  #mobile-topbar-title { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+  #mobile-topbar-sub   { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+  #mobile-export-btn {
+    font-size: 12px;
+    color: var(--accent-text);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 5px 11px;
+    background: var(--accent-light);
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-weight: 500;
+    transition: background var(--transition);
+  }
+  #mobile-export-btn:hover { background: var(--ok-border); }
+
+  #mobile-screen-area {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  #mobile-fab {
+    position: absolute;
+    bottom: 62px;
+    right: 16px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    color: #fff;
+    font-weight: 300;
+    box-shadow: var(--shadow-md);
+    transition: transform var(--transition), background var(--transition);
+  }
+  #mobile-fab:hover { transform: scale(1.08); background: var(--accent-text); }
+
+  #mobile-fab-menu {
+    position: absolute;
+    bottom: 116px;
+    right: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    z-index: 20;
+    display: none;
+    min-width: 210px;
+    box-shadow: var(--shadow-md);
+  }
+  #mobile-fab-menu.open { display: block; }
+  .fab-option {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 11px 15px;
+    font-size: 13px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .fab-option:last-child { border-bottom: none; }
+  .fab-option:hover { background: var(--surface-2); }
+  .fab-opt-icon { font-size: 15px; width: 20px; text-align: center; }
+
+  #mobile-bottom-nav {
+    display: flex;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  .mobile-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px 10px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: var(--font-body);
+    transition: background var(--transition);
+  }
+  .mobile-nav-tab:hover { background: var(--surface-2); }
+  .mobile-nav-tab.active { background: var(--accent-light); }
+  .nav-icon  { font-size: 17px; }
+  .nav-label { font-size: 10px; color: var(--text-secondary); }
+  .mobile-nav-tab.active .nav-label { color: var(--accent-text); font-weight: 500; }
+
+  /* Mobile metrics: 2-col */
+  #mobile-view .metrics-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Mobile OCR: stacked */
+  #mobile-view .ocr-img-block { height: 110px; }
+
+  /* ─────────────────────────────────────────
+     DESKTOP LAYOUT
+  ───────────────────────────────────────── */
+  #desktop-view {
+    display: none;
+    min-height: 100vh;
+    background: var(--bg);
+  }
+
+  #desktop-frame {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  #desktop-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 24px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  #desktop-case-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
+  #desktop-case-sub  { font-size: 11px; color: var(--text-secondary); font-family: var(--font-mono); margin-top: 1px; }
+  #desktop-export-btn {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent-text);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    background: var(--accent-light);
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: background var(--transition);
+  }
+  #desktop-export-btn:hover { background: var(--ok-border); }
+
+  #desktop-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    height: calc(100vh - 50px);
+  }
+
+  #desktop-sidebar {
+    width: 170px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    background: var(--surface);
+    overflow-y: auto;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: var(--font-body);
+    width: 100%;
+    text-align: left;
+    transition: background var(--transition), color var(--transition);
+    border-left: 2px solid transparent;
+  }
+  .sidebar-item:hover { background: var(--surface-2); color: var(--text-primary); }
+  .sidebar-item.active { background: var(--accent-light); color: var(--accent-text); font-weight: 500; border-left-color: var(--accent); }
+  .sidebar-icon { font-size: 15px; width: 18px; text-align: center; }
+
+  #desktop-workspace {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  #desktop-details {
+    width: 230px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 18px 16px;
+    background: var(--surface);
+  }
+  .dp-section-label {
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-hint);
+    margin-top: 14px;
+    margin-bottom: 5px;
+  }
+  .dp-section-label:first-child { margin-top: 0; }
+  .dp-value { font-size: 12px; color: var(--text-primary); line-height: 1.5; }
+  .dp-muted { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .dp-divider { height: 1px; background: var(--border); margin: 13px 0; }
+  .dp-link { font-size: 12px; color: var(--accent-text); display: block; padding: 2px 0; cursor: pointer; }
+  .dp-empty { font-size: 12px; color: var(--text-hint); line-height: 1.6; }
+
+  /* Desktop metrics: 4-col */
+  #desktop-view .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+
+  /* Desktop OCR: side-by-side */
+  #desktop-view .ocr-card { margin: 10px 16px; }
+  #desktop-view .ocr-img-block { width: 120px; height: auto; min-height: 100px; }
+  #desktop-view .ocr-card-inner { display: flex; }
+
+  /* ── Shared screen containers ── */
+  .ws-screen, .mob-screen { display: none; }
+  .ws-screen.active, .mob-screen.active { display: block; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 99px; }
+</style>
+</head>
+<body>
+
+<!-- ── View Toggle Button ── -->
+<button id="view-toggle-btn" onclick="toggleView()" title="Switch view">
+  <!-- Mobile icon (shown when in desktop mode) -->
+  <svg id="icon-mobile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+    <rect x="7" y="2" width="10" height="20" rx="2"/>
+    <line x1="12" y1="18" x2="12" y2="18.01"/>
+  </svg>
+  <!-- Desktop icon (shown when in mobile mode) -->
+  <svg id="icon-desktop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="4" width="20" height="14" rx="2"/>
+    <line x1="8" y1="22" x2="16" y2="22"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+  </svg>
+</button>
+<div id="toggle-tooltip">Switch to desktop</div>
+
+<!-- ════════════════════════════════════════
+     MOBILE VIEW
+════════════════════════════════════════ -->
+<div id="mobile-view">
+  <div id="mobile-frame">
+
+    <div id="mobile-topbar">
+      <div>
+        <div id="mobile-topbar-title">123 Main St dispute</div>
+        <div id="mobile-topbar-sub">3 items in inbox</div>
+      </div>
+      <button id="mobile-export-btn">Export ↑</button>
+    </div>
+
+    <div id="mobile-screen-area">
+
+      <!-- INBOX -->
+      <div class="mob-screen active" id="mob-inbox">
+        <div class="metrics-grid">
+          <div class="metric-card" id="mob-metric-uploaded"><div class="metric-card__label">uploaded</div><div class="metric-card__val">7</div></div>
+          <div class="metric-card" id="mob-metric-reviewed"><div class="metric-card__label">reviewed</div><div class="metric-card__val">4</div></div>
+          <div class="metric-card" id="mob-metric-claims"><div class="metric-card__label">claims</div><div class="metric-card__val">2</div></div>
+          <div class="metric-card" id="mob-metric-export"><div class="metric-card__label">last export</div><div class="metric-card__val" style="font-size:14px;margin-top:3px;">3 days ago</div></div>
+        </div>
+        <div class="nudge-banner" id="mob-nudge-inbox">3 items in inbox — want to review one?</div>
+        <div class="section-label">Needs review</div>
+        <div class="ocr-card" id="mob-ocr-card-1">
+          <div class="ocr-img-block" style="height:110px;">🖼</div>
+          <div class="ocr-text-block">
+            <div class="ocr-method-label">Extracted text (Tesseract)</div>
+            <div class="ocr-warning">Text extraction may be less accurate. Please review carefully.</div>
+            <div class="ocr-body" id="mob-ocr-text-1">"Notice of rent increase effective March 1. New monthly rent: $2,100. Previous: $1,850."</div>
+          </div>
+          <div class="ocr-actions">
+            <button class="btn-confirm" id="mob-btn-confirm-1">Confirm text</button>
+            <button class="btn-edit" id="mob-btn-edit-1">Edit</button>
+          </div>
+        </div>
+        <div class="evidence-item" id="mob-inbox-item-1">
+          <div class="evidence-thumb">📷</div>
+          <div class="evidence-body">
+            <div class="evidence-title">Photo — no caption yet</div>
+            <div class="evidence-meta">Added today · No date set</div>
+            <span class="tag tag-unreviewed">unreviewed</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TIMELINE -->
+      <div class="mob-screen" id="mob-timeline">
+        <div class="section-label">All events, oldest first</div>
+        <div class="timeline-entry" id="mob-tl-1">
+          <div class="tl-spine"><div class="tl-dot payment"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">2023-09-01</div><div class="tl-title">Lease signed — $1,850/mo</div><div class="tl-desc">Fixed term, 12 months</div></div>
+        </div>
+        <div class="timeline-entry" id="mob-tl-2">
+          <div class="tl-spine"><div class="tl-dot message"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">2024-01-14</div><div class="tl-title">Text — landlord re: late fee</div><div class="tl-desc">"I'm adding a $150 late fee to next month's rent."</div></div>
+        </div>
+        <div class="timeline-entry" id="mob-tl-3">
+          <div class="tl-spine"><div class="tl-dot notice"></div><div class="tl-line"></div></div>
+          <div class="tl-body"><div class="tl-date">2024-02-03</div><div class="tl-title">Rent increase notice received</div><div class="tl-desc">$1,850 → $2,100 effective March 1</div></div>
+        </div>
+        <div class="timeline-entry" id="mob-tl-4">
+          <div class="tl-spine"><div class="tl-dot payment"></div></div>
+          <div class="tl-body"><div class="tl-date">2024-03-01</div><div class="tl-title">Payment — $2,100</div><div class="tl-desc">Bank record uploaded</div></div>
+        </div>
+        <div class="undated-pile" id="mob-undated-pile">2 items have no date — tap to assign</div>
+      </div>
+
+      <!-- EVIDENCE -->
+      <div class="mob-screen" id="mob-evidence">
+        <div class="screen-tabs" id="mob-evidence-tabs">
+          <button class="screen-tab active" id="mob-etab-docs" onclick="switchMobEvidenceTab('docs')">Documents</button>
+          <button class="screen-tab" id="mob-etab-msgs" onclick="switchMobEvidenceTab('msgs')">Messages</button>
+        </div>
+        <div id="mob-ev-docs">
+          <div class="evidence-item" id="mob-ev-1"><div class="evidence-thumb">📄</div><div class="evidence-body"><div class="evidence-title">Lease agreement</div><div class="evidence-meta">Sep 1, 2023</div><span class="tag tag-lease">lease</span></div></div>
+          <div class="evidence-item" id="mob-ev-2"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Rent increase notice</div><div class="evidence-meta">Feb 3, 2024 · OCR confirmed</div><span class="tag tag-notice">rent notice</span></div></div>
+          <div class="evidence-item" id="mob-ev-3"><div class="evidence-thumb">🧾</div><div class="evidence-body"><div class="evidence-title">Bank statement — Mar</div><div class="evidence-meta">Mar 1, 2024</div><span class="tag tag-payment">payment record</span></div></div>
+          <div class="evidence-item" id="mob-ev-4"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Photo — no caption yet</div><div class="evidence-meta">No date set</div><span class="tag tag-unreviewed">unreviewed</span></div></div>
+        </div>
+        <div id="mob-ev-msgs" style="display:none;">
+          <div class="thread-header" id="mob-thread-header">iMessage thread · Imported via iMazing CSV</div>
+          <div class="msg-row" id="mob-msg-1"><div><div class="msg-sender">Landlord</div><div class="bubble received">Your rent is late. There will be a $150 fee added.</div><div class="msg-meta">2024-01-14 · 09:43</div></div></div>
+          <div class="msg-row sent" id="mob-msg-2"><div style="text-align:right;"><div class="bubble sent">I sent the payment on the 1st. Here's my confirmation.</div><div class="msg-meta">2024-01-14 · 10:02</div></div></div>
+          <div class="msg-row" id="mob-msg-3"><div><div class="msg-sender">Landlord</div><div class="bubble received">I'll look into it.</div><div class="msg-meta">2024-01-14 · 11:15</div></div></div>
+        </div>
+      </div>
+
+      <!-- LAW -->
+      <div class="mob-screen" id="mob-law">
+        <div class="screen-tabs" id="mob-law-tabs">
+          <button class="screen-tab active" id="mob-ltab-claims"   onclick="switchMobLawTab('claims')">Claims</button>
+          <button class="screen-tab"         id="mob-ltab-notes"    onclick="switchMobLawTab('notes')">Legal notes</button>
+          <button class="screen-tab"         id="mob-ltab-questions" onclick="switchMobLawTab('questions')">Questions</button>
+        </div>
+        <div id="mob-law-claims">
+          <div class="claims-disclaimer" id="mob-claims-disclaimer">These are topics to discuss with your lawyer, not conclusions about your case.</div>
+          <div class="claim-card" id="mob-claim-1">
+            <div class="claim-title">Rent increase notice — possible timing issue</div>
+            <div class="claim-desc">Notice received Feb 3 for March 1 increase. Unsure if notice period is long enough under state law.</div>
+            <div class="claim-footer"><span class="status-pill status-researching">researching</span><span class="linked-count">2 evidence · 1 legal note</span></div>
+          </div>
+          <div class="claim-card" id="mob-claim-2">
+            <div class="claim-title">Late fee — possible violation</div>
+            <div class="claim-desc">$150 late fee charged. Need to check if this exceeds the legal cap.</div>
+            <div class="claim-footer"><span class="status-pill status-ready">ready to discuss</span><span class="linked-count">1 evidence · 1 legal note</span></div>
+          </div>
+        </div>
+        <div id="mob-law-notes" style="display:none;">
+          <div class="note-item" id="mob-note-1"><div class="note-title">Rent increase notice requirements</div><div class="note-meta">Source: state tenant rights guide · Confidence: medium</div><div class="note-body">Most states require 30 days written notice. Need to verify exact requirement for this state.</div><span class="tag tag-comm">linked: claim #1</span></div>
+          <div class="note-item" id="mob-note-2"><div class="note-title">Late fee caps</div><div class="note-meta">Source: city housing code · Confidence: low</div><div class="note-body">Some jurisdictions cap late fees at 5% of monthly rent. Need to verify locally.</div><span class="tag tag-comm">linked: claim #2</span></div>
+        </div>
+        <div id="mob-law-questions" style="display:none;">
+          <div class="section-label">Questions for lawyer</div>
+          <div class="question-item" id="mob-q-1"><span class="q-mark">?</span><span class="q-text">Was the 26-day notice period for my rent increase legal?</span></div>
+          <div class="question-item" id="mob-q-2"><span class="q-mark">?</span><span class="q-text">Is $150 within the legal late fee limit here?</span></div>
+          <div class="question-item" id="mob-q-3"><span class="q-mark">?</span><span class="q-text">Does the landlord need to provide receipts for fees charged?</span></div>
+        </div>
+      </div>
+
+      <!-- EXPORT -->
+      <div class="mob-screen" id="mob-export">
+        <div class="section-label">Export types</div>
+        <div class="export-option" id="mob-export-full"><div class="export-icon">📦</div><div class="export-body"><div class="export-title">Full case file</div><div class="export-desc">Everything · Lawyer packet / backup</div></div></div>
+        <div class="export-option" id="mob-export-summary"><div class="export-icon">📋</div><div class="export-body"><div class="export-title">Lawyer summary</div><div class="export-desc">Claims, questions, key evidence</div></div></div>
+        <div class="export-option" id="mob-export-timeline"><div class="export-icon">📅</div><div class="export-body"><div class="export-title">Timeline only</div><div class="export-desc">Chronological event list</div></div></div>
+        <div class="export-option" id="mob-export-questions"><div class="export-icon">❓</div><div class="export-body"><div class="export-title">Legal questions</div><div class="export-desc">All questions compiled</div></div></div>
+        <div class="section-label">Format</div>
+        <div class="format-btns" id="mob-format-btns">
+          <button class="fmt-btn active" id="mob-fmt-md" onclick="setFmt(this,'mob')">Markdown</button>
+          <button class="fmt-btn" id="mob-fmt-pdf" onclick="setFmt(this,'mob')">PDF</button>
+          <button class="fmt-btn" id="mob-fmt-html" onclick="setFmt(this,'mob')">HTML</button>
+        </div>
+        <div class="nudge-banner" id="mob-nudge-export">No export in 3 days — export a backup after each significant session.</div>
+        <div class="disclaimer">All exports include: "This document was prepared for organizational purposes only and does not constitute legal advice." OCR caveat included where applicable.</div>
+      </div>
+
+    </div><!-- /screen-area -->
+
+    <!-- FAB -->
+    <button id="mobile-fab" onclick="toggleFab()">+</button>
+    <div id="mobile-fab-menu">
+      <div class="fab-option" id="mob-fab-photo"><span class="fab-opt-icon">📷</span>Add photo or document</div>
+      <div class="fab-option" id="mob-fab-msgs"><span class="fab-opt-icon">💬</span>Import text messages</div>
+      <div class="fab-option" id="mob-fab-note"><span class="fab-opt-icon">📝</span>Add note</div>
+      <div class="fab-option" id="mob-fab-legal"><span class="fab-opt-icon">⚖️</span>Add legal note</div>
+      <div class="fab-option" id="mob-fab-question"><span class="fab-opt-icon">❓</span>Add question for lawyer</div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div id="mobile-bottom-nav">
+      <button class="mobile-nav-tab active" id="mob-nav-inbox"    onclick="showMobScreen('inbox')"><span class="nav-icon">📥</span><span class="nav-label">Inbox</span></button>
+      <button class="mobile-nav-tab"         id="mob-nav-timeline" onclick="showMobScreen('timeline')"><span class="nav-icon">📅</span><span class="nav-label">Timeline</span></button>
+      <button class="mobile-nav-tab"         id="mob-nav-evidence" onclick="showMobScreen('evidence')"><span class="nav-icon">🗂️</span><span class="nav-label">Evidence</span></button>
+      <button class="mobile-nav-tab"         id="mob-nav-law"      onclick="showMobScreen('law')"><span class="nav-icon">⚖️</span><span class="nav-label">Law</span></button>
+      <button class="mobile-nav-tab"         id="mob-nav-export"   onclick="showMobScreen('export')"><span class="nav-icon">📤</span><span class="nav-label">Export</span></button>
+    </div>
+
+  </div><!-- /mobile-frame -->
+</div><!-- /mobile-view -->
+
+<!-- ════════════════════════════════════════
+     DESKTOP VIEW
+════════════════════════════════════════ -->
+<div id="desktop-view">
+  <div id="desktop-frame">
+
+    <div id="desktop-topbar">
+      <div>
+        <div id="desktop-case-name">123 Main St dispute</div>
+        <div id="desktop-case-sub">Landlord: J. Smith · Month-to-month · Started Sep 2023</div>
+      </div>
+      <button id="desktop-export-btn">Export ↑</button>
+    </div>
+
+    <div id="desktop-body">
+
+      <!-- Sidebar -->
+      <div id="desktop-sidebar">
+        <button class="sidebar-item active" id="dt-si-inbox"    onclick="showDtScreen('inbox')"><span class="sidebar-icon">📥</span>Inbox</button>
+        <button class="sidebar-item"         id="dt-si-timeline" onclick="showDtScreen('timeline')"><span class="sidebar-icon">📅</span>Timeline</button>
+        <button class="sidebar-item"         id="dt-si-evidence" onclick="showDtScreen('evidence')"><span class="sidebar-icon">🗂️</span>Evidence</button>
+        <button class="sidebar-item"         id="dt-si-law"      onclick="showDtScreen('law')"><span class="sidebar-icon">⚖️</span>Law</button>
+        <button class="sidebar-item"         id="dt-si-export"   onclick="showDtScreen('export')"><span class="sidebar-icon">📤</span>Export</button>
+      </div>
+
+      <!-- Main workspace -->
+      <div id="desktop-workspace">
+
+        <!-- INBOX -->
+        <div class="ws-screen active" id="dt-inbox">
+          <div class="metrics-grid">
+            <div class="metric-card" id="dt-metric-uploaded"><div class="metric-card__label">uploaded</div><div class="metric-card__val">7</div></div>
+            <div class="metric-card" id="dt-metric-reviewed"><div class="metric-card__label">reviewed</div><div class="metric-card__val">4</div></div>
+            <div class="metric-card" id="dt-metric-claims"><div class="metric-card__label">claims</div><div class="metric-card__val">2</div></div>
+            <div class="metric-card" id="dt-metric-export"><div class="metric-card__label">last export</div><div class="metric-card__val" style="font-size:14px;margin-top:3px;">3 days ago</div></div>
+          </div>
+          <div class="nudge-banner" id="dt-nudge-inbox">3 items in inbox — want to review one?</div>
+          <div class="section-label">Needs review</div>
+          <div class="ocr-card" id="dt-ocr-card-1" onclick="selectDtItem('rent-notice')">
+            <div class="ocr-card-inner">
+              <div class="ocr-img-block" style="width:120px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:32px;min-height:110px;background:#F0EDE7;">🖼</div>
+              <div class="ocr-text-block" style="flex:1;">
+                <div class="ocr-method-label">Extracted text (Tesseract)</div>
+                <div class="ocr-warning">Text extraction may be less accurate. Please review carefully.</div>
+                <div class="ocr-body" id="dt-ocr-text-1">"Notice of rent increase effective March 1. New monthly rent: $2,100. Previous: $1,850."</div>
+                <div class="ocr-actions" style="padding:10px 0 0;border:none;">
+                  <button class="btn-confirm" id="dt-btn-confirm-1">Confirm text</button>
+                  <button class="btn-edit" id="dt-btn-edit-1">Edit</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="evidence-item" id="dt-inbox-item-1" onclick="selectDtItem('photo-uncaptioned')">
+            <div class="evidence-thumb">📷</div>
+            <div class="evidence-body">
+              <div class="evidence-title">Photo — no caption yet</div>
+              <div class="evidence-meta">Added today · No date set</div>
+              <span class="tag tag-unreviewed">unreviewed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- TIMELINE -->
+        <div class="ws-screen" id="dt-timeline">
+          <div class="section-label">All events, oldest first</div>
+          <div class="timeline-entry" id="dt-tl-1" onclick="selectDtItem('lease')">
+            <div class="tl-spine"><div class="tl-dot payment"></div><div class="tl-line"></div></div>
+            <div class="tl-body"><div class="tl-date">2023-09-01</div><div class="tl-title">Lease signed — $1,850/mo</div><div class="tl-desc">Fixed term, 12 months</div></div>
+          </div>
+          <div class="timeline-entry" id="dt-tl-2" onclick="selectDtItem('text-jan')">
+            <div class="tl-spine"><div class="tl-dot message"></div><div class="tl-line"></div></div>
+            <div class="tl-body"><div class="tl-date">2024-01-14</div><div class="tl-title">Text — landlord re: late fee</div><div class="tl-desc">"I'm adding a $150 late fee to next month's rent."</div></div>
+          </div>
+          <div class="timeline-entry" id="dt-tl-3" onclick="selectDtItem('rent-notice')">
+            <div class="tl-spine"><div class="tl-dot notice"></div><div class="tl-line"></div></div>
+            <div class="tl-body"><div class="tl-date">2024-02-03</div><div class="tl-title">Rent increase notice received</div><div class="tl-desc">$1,850 → $2,100 effective March 1</div></div>
+          </div>
+          <div class="timeline-entry" id="dt-tl-4" onclick="selectDtItem('payment-mar')">
+            <div class="tl-spine"><div class="tl-dot payment"></div></div>
+            <div class="tl-body"><div class="tl-date">2024-03-01</div><div class="tl-title">Payment — $2,100</div><div class="tl-desc">Bank record uploaded</div></div>
+          </div>
+          <div class="undated-pile" id="dt-undated-pile">2 items have no date — click to assign</div>
+        </div>
+
+        <!-- EVIDENCE -->
+        <div class="ws-screen" id="dt-evidence">
+          <div class="screen-tabs" id="dt-evidence-tabs">
+            <button class="screen-tab active" id="dt-etab-docs" onclick="switchDtEvidenceTab('docs')">Documents</button>
+            <button class="screen-tab"         id="dt-etab-msgs" onclick="switchDtEvidenceTab('msgs')">Messages</button>
+          </div>
+          <div id="dt-ev-docs">
+            <div class="evidence-item" id="dt-ev-1" onclick="selectDtItem('lease')"><div class="evidence-thumb">📄</div><div class="evidence-body"><div class="evidence-title">Lease agreement</div><div class="evidence-meta">Sep 1, 2023</div><span class="tag tag-lease">lease</span></div></div>
+            <div class="evidence-item" id="dt-ev-2" onclick="selectDtItem('rent-notice')"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Rent increase notice</div><div class="evidence-meta">Feb 3, 2024 · OCR confirmed</div><span class="tag tag-notice">rent notice</span></div></div>
+            <div class="evidence-item" id="dt-ev-3" onclick="selectDtItem('payment-mar')"><div class="evidence-thumb">🧾</div><div class="evidence-body"><div class="evidence-title">Bank statement — Mar</div><div class="evidence-meta">Mar 1, 2024</div><span class="tag tag-payment">payment record</span></div></div>
+            <div class="evidence-item" id="dt-ev-4" onclick="selectDtItem('photo-uncaptioned')"><div class="evidence-thumb">📷</div><div class="evidence-body"><div class="evidence-title">Photo — no caption yet</div><div class="evidence-meta">No date set</div><span class="tag tag-unreviewed">unreviewed</span></div></div>
+          </div>
+          <div id="dt-ev-msgs" style="display:none;">
+            <div class="thread-header" id="dt-thread-header">iMessage thread · Imported via iMazing CSV</div>
+            <div class="msg-row" id="dt-msg-1"><div><div class="msg-sender">Landlord</div><div class="bubble received">Your rent is late. There will be a $150 fee added.</div><div class="msg-meta">2024-01-14 · 09:43</div></div></div>
+            <div class="msg-row sent" id="dt-msg-2"><div style="text-align:right;"><div class="bubble sent">I sent the payment on the 1st. Here's my confirmation.</div><div class="msg-meta">2024-01-14 · 10:02</div></div></div>
+            <div class="msg-row" id="dt-msg-3"><div><div class="msg-sender">Landlord</div><div class="bubble received">I'll look into it.</div><div class="msg-meta">2024-01-14 · 11:15</div></div></div>
+          </div>
+        </div>
+
+        <!-- LAW -->
+        <div class="ws-screen" id="dt-law">
+          <div class="screen-tabs" id="dt-law-tabs">
+            <button class="screen-tab active" id="dt-ltab-claims"    onclick="switchDtLawTab('claims')">Claims</button>
+            <button class="screen-tab"         id="dt-ltab-notes"     onclick="switchDtLawTab('notes')">Legal notes</button>
+            <button class="screen-tab"         id="dt-ltab-questions" onclick="switchDtLawTab('questions')">Questions</button>
+          </div>
+          <div id="dt-law-claims">
+            <div class="claims-disclaimer" id="dt-claims-disclaimer">These are topics to discuss with your lawyer, not conclusions about your case.</div>
+            <div class="claim-card" id="dt-claim-1" onclick="selectDtItem('claim-1')">
+              <div class="claim-title">Rent increase notice — possible timing issue</div>
+              <div class="claim-desc">Notice received Feb 3 for March 1 increase. Unsure if notice period is long enough under state law.</div>
+              <div class="claim-footer"><span class="status-pill status-researching">researching</span><span class="linked-count">2 evidence · 1 legal note</span></div>
+            </div>
+            <div class="claim-card" id="dt-claim-2" onclick="selectDtItem('claim-2')">
+              <div class="claim-title">Late fee — possible violation</div>
+              <div class="claim-desc">$150 late fee charged. Need to check if this exceeds the legal cap.</div>
+              <div class="claim-footer"><span class="status-pill status-ready">ready to discuss</span><span class="linked-count">1 evidence · 1 legal note</span></div>
+            </div>
+          </div>
+          <div id="dt-law-notes" style="display:none;">
+            <div class="note-item" id="dt-note-1" onclick="selectDtItem('note-1')"><div class="note-title">Rent increase notice requirements</div><div class="note-meta">Source: state tenant rights guide · Confidence: medium</div><div class="note-body">Most states require 30 days written notice. Need to verify exact requirement for this state.</div><span class="tag tag-comm">linked: claim #1</span></div>
+            <div class="note-item" id="dt-note-2" onclick="selectDtItem('note-2')"><div class="note-title">Late fee caps</div><div class="note-meta">Source: city housing code · Confidence: low</div><div class="note-body">Some jurisdictions cap late fees at 5% of monthly rent. Need to verify locally.</div><span class="tag tag-comm">linked: claim #2</span></div>
+          </div>
+          <div id="dt-law-questions" style="display:none;">
+            <div class="section-label">Questions for lawyer</div>
+            <div class="question-item" id="dt-q-1"><span class="q-mark">?</span><span class="q-text">Was the 26-day notice period for my rent increase legal?</span></div>
+            <div class="question-item" id="dt-q-2"><span class="q-mark">?</span><span class="q-text">Is $150 within the legal late fee limit here?</span></div>
+            <div class="question-item" id="dt-q-3"><span class="q-mark">?</span><span class="q-text">Does the landlord need to provide receipts for fees charged?</span></div>
+          </div>
+        </div>
+
+        <!-- EXPORT -->
+        <div class="ws-screen" id="dt-export">
+          <div class="section-label">Export types</div>
+          <div class="export-option" id="dt-export-full"><div class="export-icon">📦</div><div class="export-body"><div class="export-title">Full case file</div><div class="export-desc">Everything · Lawyer packet / backup</div></div></div>
+          <div class="export-option" id="dt-export-summary"><div class="export-icon">📋</div><div class="export-body"><div class="export-title">Lawyer summary</div><div class="export-desc">Claims, questions, key evidence</div></div></div>
+          <div class="export-option" id="dt-export-timeline"><div class="export-icon">📅</div><div class="export-body"><div class="export-title">Timeline only</div><div class="export-desc">Chronological event list</div></div></div>
+          <div class="export-option" id="dt-export-questions"><div class="export-icon">❓</div><div class="export-body"><div class="export-title">Legal questions</div><div class="export-desc">All questions compiled</div></div></div>
+          <div class="section-label">Format</div>
+          <div class="format-btns" id="dt-format-btns">
+            <button class="fmt-btn active" id="dt-fmt-md" onclick="setFmt(this,'dt')">Markdown</button>
+            <button class="fmt-btn" id="dt-fmt-pdf" onclick="setFmt(this,'dt')">PDF</button>
+            <button class="fmt-btn" id="dt-fmt-html" onclick="setFmt(this,'dt')">HTML</button>
+          </div>
+          <div class="nudge-banner" id="dt-nudge-export">No export in 3 days — export a backup after each significant session.</div>
+          <div class="disclaimer">All exports include: "This document was prepared for organizational purposes only and does not constitute legal advice." OCR caveat included where applicable.</div>
+        </div>
+
+      </div><!-- /workspace -->
+
+      <!-- Details Panel -->
+      <div id="desktop-details">
+        <div class="dp-empty" id="dt-details-empty">Select an item to see notes, tags, and links.</div>
+        <div id="dt-details-content" style="display:none;"></div>
+      </div>
+
+    </div><!-- /desktop-body -->
+  </div><!-- /desktop-frame -->
+</div><!-- /desktop-view -->
+
+<script>
+/* ── View Toggle ── */
+var currentView = 'mobile';
+var tooltip = document.getElementById('toggle-tooltip');
+
+function toggleView() {
+  if (currentView === 'mobile') {
+    document.getElementById('mobile-view').style.display = 'none';
+    document.getElementById('desktop-view').style.display = 'block';
+    document.getElementById('icon-desktop').style.display = 'none';
+    document.getElementById('icon-mobile').style.display = 'block';
+    tooltip.textContent = 'Switch to mobile';
+    currentView = 'desktop';
+  } else {
+    document.getElementById('mobile-view').style.display = 'flex';
+    document.getElementById('desktop-view').style.display = 'none';
+    document.getElementById('icon-mobile').style.display = 'none';
+    document.getElementById('icon-desktop').style.display = 'block';
+    tooltip.textContent = 'Switch to desktop';
+    currentView = 'mobile';
+  }
+}
+
+/* ── Mobile Navigation ── */
+var mobScreens = ['inbox','timeline','evidence','law','export'];
+var mobSubtitles = {
+  inbox: '3 items in inbox',
+  timeline: 'Chronological view',
+  evidence: 'Documents & messages',
+  law: 'Notes, claims & questions',
+  export: 'Backup & share'
+};
+
+function showMobScreen(name) {
+  mobScreens.forEach(function(s) {
+    document.getElementById('mob-' + s).classList.remove('active');
+    document.getElementById('mob-nav-' + s).classList.remove('active');
+  });
+  document.getElementById('mob-' + name).classList.add('active');
+  document.getElementById('mob-nav-' + name).classList.add('active');
+  document.getElementById('mobile-topbar-sub').textContent = mobSubtitles[name];
+  closeFab();
+}
+
+function toggleFab() {
+  var m = document.getElementById('mobile-fab-menu');
+  m.classList.toggle('open');
+}
+function closeFab() {
+  document.getElementById('mobile-fab-menu').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  var fab = document.getElementById('mobile-fab');
+  var menu = document.getElementById('mobile-fab-menu');
+  if (!fab.contains(e.target) && !menu.contains(e.target)) closeFab();
+});
+
+function switchMobEvidenceTab(tab) {
+  document.getElementById('mob-etab-docs').classList.remove('active');
+  document.getElementById('mob-etab-msgs').classList.remove('active');
+  document.getElementById('mob-ev-docs').style.display = 'none';
+  document.getElementById('mob-ev-msgs').style.display = 'none';
+  if (tab === 'docs') {
+    document.getElementById('mob-etab-docs').classList.add('active');
+    document.getElementById('mob-ev-docs').style.display = 'block';
+  } else {
+    document.getElementById('mob-etab-msgs').classList.add('active');
+    document.getElementById('mob-ev-msgs').style.display = 'block';
+  }
+}
+
+function switchMobLawTab(tab) {
+  ['claims','notes','questions'].forEach(function(t) {
+    document.getElementById('mob-ltab-' + t).classList.remove('active');
+    document.getElementById('mob-law-' + t).style.display = 'none';
+  });
+  document.getElementById('mob-ltab-' + tab).classList.add('active');
+  document.getElementById('mob-law-' + tab).style.display = 'block';
+}
+
+/* ── Desktop Navigation ── */
+var dtScreens = ['inbox','timeline','evidence','law','export'];
+
+function showDtScreen(name) {
+  dtScreens.forEach(function(s) {
+    document.getElementById('dt-' + s).classList.remove('active');
+    document.getElementById('dt-si-' + s).classList.remove('active');
+  });
+  document.getElementById('dt-' + name).classList.add('active');
+  document.getElementById('dt-si-' + name).classList.add('active');
+  clearDtDetails();
+}
+
+function switchDtEvidenceTab(tab) {
+  document.getElementById('dt-etab-docs').classList.remove('active');
+  document.getElementById('dt-etab-msgs').classList.remove('active');
+  document.getElementById('dt-ev-docs').style.display = 'none';
+  document.getElementById('dt-ev-msgs').style.display = 'none';
+  if (tab === 'docs') {
+    document.getElementById('dt-etab-docs').classList.add('active');
+    document.getElementById('dt-ev-docs').style.display = 'block';
+  } else {
+    document.getElementById('dt-etab-msgs').classList.add('active');
+    document.getElementById('dt-ev-msgs').style.display = 'block';
+  }
+}
+
+function switchDtLawTab(tab) {
+  ['claims','notes','questions'].forEach(function(t) {
+    document.getElementById('dt-ltab-' + t).classList.remove('active');
+    document.getElementById('dt-law-' + t).style.display = 'none';
+  });
+  document.getElementById('dt-ltab-' + tab).classList.add('active');
+  document.getElementById('dt-law-' + tab).style.display = 'block';
+}
+
+/* ── Desktop Details Panel ── */
+var itemDetails = {
+  'rent-notice': {
+    title: 'Rent increase notice',
+    fields: [['Type','Photo'],['Category','Rent notice'],['Date','Feb 3, 2024'],['OCR method','Tesseract'],['Review status','Pending confirmation']],
+    tags: ['rent notice'],
+    notes: 'Received 26 days before effective date. Check notice period requirements.',
+    links: ['Claim: notice timing issue','Legal note: notice requirements']
+  },
+  'lease': {
+    title: 'Lease agreement',
+    fields: [['Type','PDF'],['Category','Lease'],['Date','Sep 1, 2023'],['OCR method','Manual']],
+    tags: ['lease'],
+    notes: 'Original signed lease. Month-to-month after fixed term expires.',
+    links: ['Claim: notice timing issue']
+  },
+  'text-jan': {
+    title: 'Text — Jan 14 late fee',
+    fields: [['Type','Message'],['Sender','Landlord'],['Direction','Received'],['Date','Jan 14, 2024 · 09:43'],['Import source','iMazing CSV']],
+    tags: ['communication'],
+    notes: 'Landlord claims rent was late. Have payment confirmation from the 1st.',
+    links: ['Claim: late fee — possible violation']
+  },
+  'payment-mar': {
+    title: 'Bank statement — Mar',
+    fields: [['Type','Screenshot'],['Category','Payment record'],['Date','Mar 1, 2024'],['OCR method','Tesseract'],['Review status','Confirmed']],
+    tags: ['payment record'],
+    notes: '',
+    links: []
+  },
+  'photo-uncaptioned': {
+    title: 'Photo — uncaptioned',
+    fields: [['Type','Photo'],['Category','Unassigned'],['Date','Not set'],['OCR method','Pending']],
+    tags: ['unreviewed'],
+    notes: '',
+    links: []
+  },
+  'claim-1': {
+    title: 'Claim: notice timing',
+    fields: [['Status','Researching'],['Confidence','Low']],
+    tags: [],
+    notes: 'Notice received Feb 3 for March 1. Need to verify state notice period law.',
+    links: ['Evidence: rent increase notice','Legal note: notice requirements']
+  },
+  'claim-2': {
+    title: 'Claim: late fee',
+    fields: [['Status','Ready to discuss'],['Confidence','Medium']],
+    tags: [],
+    notes: '$150 fee charged. Verify cap under local code.',
+    links: ['Evidence: text Jan 14','Legal note: late fee caps']
+  },
+  'note-1': {
+    title: 'Legal note: notice requirements',
+    fields: [['Topic','Rent increase notice'],['Source','State tenant rights guide'],['Confidence','Medium'],['Applies to case','Yes']],
+    tags: [],
+    notes: '',
+    links: ['Claim: notice timing issue']
+  },
+  'note-2': {
+    title: 'Legal note: late fee caps',
+    fields: [['Topic','Late fee limits'],['Source','City housing code'],['Confidence','Low'],['Applies to case','Maybe']],
+    tags: [],
+    notes: '',
+    links: ['Claim: late fee — possible violation']
+  }
+};
+
+function selectDtItem(id) {
+  var item = itemDetails[id];
+  if (!item) return;
+  var html = '<div style="font-size:13px;font-weight:500;color:#1A1814;margin-bottom:13px;">' + item.title + '</div>';
+  item.fields.forEach(function(f) {
+    html += '<div class="dp-section-label">' + f[0] + '</div>';
+    html += '<div class="dp-value">' + f[1] + '</div>';
+  });
+  if (item.tags && item.tags.length) {
+    html += '<div class="dp-divider"></div>';
+    html += '<div class="dp-section-label">Tags</div><div>';
+    item.tags.forEach(function(t) {
+      html += '<span class="tag tag-' + t.replace(/\s/g,'-') + '">' + t + '</span>';
+    });
+    html += '</div>';
+  }
+  if (item.notes) {
+    html += '<div class="dp-divider"></div>';
+    html += '<div class="dp-section-label">Notes</div>';
+    html += '<div class="dp-muted">' + item.notes + '</div>';
+  }
+  if (item.links && item.links.length) {
+    html += '<div class="dp-divider"></div>';
+    html += '<div class="dp-section-label">Linked to</div>';
+    item.links.forEach(function(l) {
+      html += '<div class="dp-link">↗ ' + l + '</div>';
+    });
+  }
+  document.getElementById('dt-details-empty').style.display = 'none';
+  var content = document.getElementById('dt-details-content');
+  content.style.display = 'block';
+  content.innerHTML = html;
+}
+
+function clearDtDetails() {
+  document.getElementById('dt-details-empty').style.display = 'block';
+  var content = document.getElementById('dt-details-content');
+  content.style.display = 'none';
+  content.innerHTML = '';
+}
+
+/* ── Format button toggle ── */
+function setFmt(btn, prefix) {
+  var container = btn.closest('.format-btns');
+  container.querySelectorAll('.fmt-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
