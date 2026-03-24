@@ -239,13 +239,13 @@ Optional directions (to be decided in spec):
 <details>
 <summary>Click to expand</summary>
 
-**Status:** planning / not implemented.
+**Status:** initial TypeScript MVP scaffold implemented (domain + parsers + OCR ports).
 
 For product and technical detail, see:
 
-- [MVP design spec](docs/specs/landlord_case_organizer_mvp_design_spec.md)
-- [MVP TDD plan](docs/plans/landlord_mvp_tdd_c6ad0408.plan.md)
-- [Plan review follow-ups](docs/discussions/landlord_mvp_tdd_plan_review_followups.md)
+- [Design spec v2](docs/specs/landlord_case_organizer_design_spec_v2.md)
+- [MVP TDD plan v2](docs/plans/landlord_mvp_tdd_v2.plan.md)
+- [Archived v1 plan](docs/archive/plans/landlord_mvp_tdd_c6ad0408_v1.plan.md)
 
 </details>
 
