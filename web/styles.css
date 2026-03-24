@@ -235,6 +235,12 @@ body {
   color: #c94040;
 }
 
+.field__hint {
+  font-size: 11px;
+  color: #9a9690;
+  margin-top: 3px;
+}
+
 .field input[type='text'],
 .field input[type='date'],
 .field textarea,
