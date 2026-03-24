@@ -33,10 +33,12 @@ export interface Case {
   id: string;
   title: string;
   lastExportedAt: Date | null;
+  evidence: Evidence[];
+  messages: Message[];
 }
 
 export interface Gap {
-  id: string;
+  id: 'gap.missingLease' | 'gap.missingPaymentRecord' | 'gap.missingRentIncreaseNotice' | 'gap.noConfirmedDates';
   displayName: string;
   description: string;
   severity: 'suggested' | 'notable';
