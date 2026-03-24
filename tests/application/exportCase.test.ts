@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../../app/domain/factories.js';
 import { exportCaseMarkdown } from '../../app/application/exportCase.js';
-import type { Case, Evidence, Message } from '../../app/domain/types.js';
+import type { Case, Claim, Evidence, LegalNote, Message } from '../../app/domain/types.js';
 import type { CaseRepository } from '../../app/ports/CaseRepository.js';
 
 class InMemoryCaseRepository implements CaseRepository {
@@ -16,16 +16,13 @@ class InMemoryCaseRepository implements CaseRepository {
   }
 
   async saveEvidence(_caseId: string, _evidence: Evidence[]): Promise<void> {}
-
-  async listEvidence(_caseId: string): Promise<Evidence[]> {
-    return [];
-  }
-
+  async listEvidence(_caseId: string): Promise<Evidence[]> { return []; }
   async saveMessages(_caseId: string, _messages: Message[]): Promise<void> {}
-
-  async listMessages(_caseId: string): Promise<Message[]> {
-    return [];
-  }
+  async listMessages(_caseId: string): Promise<Message[]> { return []; }
+  async saveClaims(_caseId: string, _claims: Claim[]): Promise<void> {}
+  async listClaims(_caseId: string): Promise<Claim[]> { return []; }
+  async saveLegalNotes(_caseId: string, _legalNotes: LegalNote[]): Promise<void> {}
+  async listLegalNotes(_caseId: string): Promise<LegalNote[]> { return []; }
 }
 
 describe('exportCaseMarkdown', () => {

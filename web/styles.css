@@ -655,6 +655,107 @@ body {
   line-height: 1.6;
 }
 
+/* ── Law tab ─────────────────────────────────────────────────────────── */
+
+.law-disclaimer {
+  font-size: 13px;
+  color: #4a4640;
+  border-left: 3px solid #2d5a3d;
+  padding-left: 10px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.law-list .item-btn {
+  flex: 1;
+}
+
+.law-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.btn-icon-del {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  color: #a09c97;
+  padding: 10px 8px;
+  min-width: 36px;
+  min-height: 44px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-del:hover {
+  color: #c94040;
+}
+
+.claim-detail {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f6f2;
+  border-radius: 10px;
+  border: 1px solid #e2ddd6;
+}
+
+.add-question-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.add-question-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d8d3cb;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.questions-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.add-form-toggle {
+  margin-top: 14px;
+  border: 1px solid #e2ddd6;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.add-form-toggle__label {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d5a3d;
+  cursor: pointer;
+  list-style: none;
+  background: #f0f7f2;
+}
+
+.add-form-toggle__label::-webkit-details-marker { display: none; }
+
+.add-form {
+  padding: 12px 14px 14px;
+  border-top: 1px solid #e2ddd6;
+}
+
+.add-form .field:last-of-type {
+  margin-bottom: 10px;
+}
+
 /* ── Accessibility ───────────────────────────────────────────────────── */
 
 .sr-only {

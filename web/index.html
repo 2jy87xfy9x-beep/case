@@ -142,6 +142,92 @@
         </div>
       </section>
 
+      <!-- ── LAW ───────────────────────────────────────────────────────── -->
+      <section id="screen-law" class="screen screen--hidden" aria-labelledby="law-heading">
+        <h2 id="law-heading" class="sr-only">Law</h2>
+
+        <div class="card">
+          <p class="law-disclaimer" role="note">
+            These are topics to bring up with your lawyer — not conclusions about your case.
+            Record what <em>you</em> want to ask or have researched, not what the app thinks.
+          </p>
+        </div>
+
+        <!-- Topics to discuss -->
+        <div class="card">
+          <h3 class="card__heading">Topics to discuss <span id="claims-count" class="badge"></span></h3>
+          <ul id="claims-list" class="item-list law-list"></ul>
+          <p id="claims-empty" class="muted">No topics yet. Add one below.</p>
+
+          <div id="claim-detail" class="claim-detail" hidden>
+            <div id="claim-detail-body"></div>
+            <div class="add-question-row field">
+              <input id="claim-question-input" type="text" placeholder="Add a question to ask your lawyer" autocomplete="off" />
+              <button type="button" id="btn-add-claim-question" class="btn btn--sm">Add</button>
+            </div>
+          </div>
+
+          <details class="add-form-toggle">
+            <summary class="add-form-toggle__label">Add a topic</summary>
+            <form id="add-claim-form" class="add-form" novalidate>
+              <label class="field">
+                <span class="field__label">Topic title <span class="required" aria-hidden="true">*</span></span>
+                <input id="claim-title" type="text" autocomplete="off" placeholder="e.g. Late fee — above legal cap" required />
+              </label>
+              <label class="field">
+                <span class="field__label">Description (your words)</span>
+                <textarea id="claim-desc" rows="3" placeholder="What happened? What are you unsure about?"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Status</span>
+                <select id="claim-status">
+                  <option value="researching">Researching</option>
+                  <option value="ready-to-discuss">Ready to discuss</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dropped">Dropped</option>
+                </select>
+              </label>
+              <button type="submit" class="btn btn--primary">Save topic</button>
+            </form>
+          </details>
+        </div>
+
+        <!-- Research notes -->
+        <div class="card">
+          <h3 class="card__heading">Research notes <span id="notes-count" class="badge"></span></h3>
+          <p class="muted" style="margin-bottom:10px">Notes on what <em>you</em> have read or learned. The app does not generate these.</p>
+          <ul id="notes-list" class="item-list law-list"></ul>
+          <p id="notes-empty" class="muted">No notes yet.</p>
+
+          <details class="add-form-toggle">
+            <summary class="add-form-toggle__label">Add a research note</summary>
+            <form id="add-note-form" class="add-form" novalidate>
+              <label class="field">
+                <span class="field__label">Topic <span class="required" aria-hidden="true">*</span></span>
+                <input id="note-topic" type="text" autocomplete="off" placeholder="e.g. Late fee caps in this state" required />
+              </label>
+              <label class="field">
+                <span class="field__label">Summary (your words)</span>
+                <textarea id="note-summary" rows="3" placeholder="What did you learn?"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Source (URL or citation)</span>
+                <input id="note-source" type="text" autocomplete="off" placeholder="e.g. tenant-rights.org/late-fees" />
+              </label>
+              <label class="field">
+                <span class="field__label">Applies to this case?</span>
+                <select id="note-applies">
+                  <option value="maybe">Maybe</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <button type="submit" class="btn btn--primary">Save note</button>
+            </form>
+          </details>
+        </div>
+      </section>
+
       <!-- ── EXPORT ─────────────────────────────────────────────────── -->
       <section id="screen-export" class="screen screen--hidden" aria-labelledby="export-heading">
         <h2 id="export-heading" class="sr-only">Export</h2>
@@ -187,6 +273,10 @@
       <button class="nav-btn" data-tab="evidence" type="button">
         <span class="nav-icon" aria-hidden="true">📁</span>
         <span class="nav-label">Evidence</span>
+      </button>
+      <button class="nav-btn" data-tab="law" type="button">
+        <span class="nav-icon" aria-hidden="true">⚖️</span>
+        <span class="nav-label">Law</span>
       </button>
       <button class="nav-btn" data-tab="gaps" type="button" id="nav-btn-gaps">
         <span class="nav-icon" aria-hidden="true">⚠️</span>

@@ -34,12 +34,51 @@ export interface Evidence {
   };
 }
 
+/** Conservative status labels — sound like a notebook, not a legal assessment. */
+export type ClaimStatus = 'researching' | 'ready-to-discuss' | 'resolved' | 'dropped';
+export type ConfidenceLevel = 'low' | 'medium' | 'high';
+export type NoteApplies = 'yes' | 'maybe' | 'no';
+
+/**
+ * A topic the user wants to discuss with their lawyer.
+ * Framed as an organisational record — not a legal conclusion.
+ * All UI copy must pass the conservative framing rule (see plan gate.claimsModuleLegalReview).
+ */
+export interface Claim {
+  id: string;
+  title: string;
+  description: string;
+  status: ClaimStatus;
+  confidence: ConfidenceLevel;
+  relatedEvidenceIds: string[];
+  relatedLegalNoteIds: string[];
+  questions: string[];
+}
+
+/**
+ * A note the user has taken about something they read or researched.
+ * The app does not generate these — the user records what *they* have learned.
+ */
+export interface LegalNote {
+  id: string;
+  topic: string;
+  summary: string;
+  source: string;
+  appliesToCase: NoteApplies;
+  confidence: ConfidenceLevel;
+  relatedClaimIds: string[];
+  relatedEvidenceIds: string[];
+  questions: string[];
+}
+
 export interface Case {
   id: string;
   title: string;
   lastExportedAt: Date | null;
   evidence: Evidence[];
   messages: Message[];
+  claims: Claim[];
+  legalNotes: LegalNote[];
 }
 
 export interface Gap {

@@ -1,4 +1,13 @@
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
+import {
+  addClaim,
+  addLegalNote,
+  createClaim,
+  createLegalNote,
+  removeClaim,
+  removeLegalNote,
+  updateClaim
+} from '../app/domain/claimsOps.js';
 import { setEvidenceCategory } from '../app/domain/evidenceOps.js';
 import { needsExportReminder } from '../app/domain/exportReminder.js';
 import { detectGaps } from '../app/domain/gapDetector.js';
@@ -6,7 +15,7 @@ import { buildTimeline } from '../app/domain/timeline.js';
 import { parseImazingCsv } from '../app/messages/parsers/imazingCsv.js';
 import { parseSmsXml } from '../app/messages/parsers/smsXml.js';
 import { IndexedDbCaseRepository } from '../app/storage/IndexedDbCaseRepository.js';
-import type { Case, Evidence, EvidenceCategory, Message, TimelineItem } from '../app/domain/types.js';
+import type { Case, Claim, Evidence, EvidenceCategory, LegalNote, Message, TimelineItem } from '../app/domain/types.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -26,7 +35,7 @@ const CATEGORY_OPTIONS: { value: string; label: string }[] = [
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type Tab = 'inbox' | 'timeline' | 'evidence' | 'gaps' | 'export';
+type Tab = 'inbox' | 'timeline' | 'evidence' | 'gaps' | 'law' | 'export';
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +44,8 @@ let currentCase: Case | null = null;
 let activeTab: Tab = 'inbox';
 let selectedEvidenceId: string | null = null;
 let reminderDismissed = false;
+let selectedClaimId: string | null = null;
+let selectedNoteId: string | null = null;
 
 // ── DOM queries ────────────────────────────────────────────────────────────
 
@@ -79,6 +90,8 @@ const btnConfirmReview = document.querySelector<HTMLButtonElement>('#btn-confirm
 const elGapsList = document.querySelector<HTMLElement>('#gaps-list')!;
 const elGapsEmpty = document.querySelector<HTMLElement>('#gaps-empty')!;
 const elGapsBadge = document.querySelector<HTMLElement>('#gaps-badge')!;
+const elClaimsCount = document.querySelector<HTMLElement>('#claims-count')!;
+const elNotesCount = document.querySelector<HTMLElement>('#notes-count')!;
 const elNavGapsBadge = document.querySelector<HTMLElement>('#nav-gaps-badge')!;
 
 // Export
@@ -87,6 +100,25 @@ const elExportReminderText = document.querySelector<HTMLElement>('#export-remind
 const elLastExported = document.querySelector<HTMLElement>('#last-exported-label')!;
 const btnExportFull = document.querySelector<HTMLButtonElement>('#btn-export-full')!;
 const btnExportSummary = document.querySelector<HTMLButtonElement>('#btn-export-summary')!;
+
+// Law tab
+const formAddClaim = document.querySelector<HTMLFormElement>('#add-claim-form')!;
+const inpClaimTitle = document.querySelector<HTMLInputElement>('#claim-title')!;
+const inpClaimDesc = document.querySelector<HTMLTextAreaElement>('#claim-desc')!;
+const inpClaimStatus = document.querySelector<HTMLSelectElement>('#claim-status')!;
+const elClaimsList = document.querySelector<HTMLElement>('#claims-list')!;
+const elClaimsEmpty = document.querySelector<HTMLElement>('#claims-empty')!;
+const elClaimDetail = document.querySelector<HTMLElement>('#claim-detail')!;
+const elClaimDetailBody = document.querySelector<HTMLElement>('#claim-detail-body')!;
+const inpClaimQuestion = document.querySelector<HTMLInputElement>('#claim-question-input')!;
+const btnAddClaimQuestion = document.querySelector<HTMLButtonElement>('#btn-add-claim-question')!;
+const formAddNote = document.querySelector<HTMLFormElement>('#add-note-form')!;
+const inpNoteTopic = document.querySelector<HTMLInputElement>('#note-topic')!;
+const inpNoteSummary = document.querySelector<HTMLTextAreaElement>('#note-summary')!;
+const inpNoteSource = document.querySelector<HTMLInputElement>('#note-source')!;
+const inpNoteApplies = document.querySelector<HTMLSelectElement>('#note-applies')!;
+const elNotesList = document.querySelector<HTMLElement>('#notes-list')!;
+const elNotesEmpty = document.querySelector<HTMLElement>('#notes-empty')!;
 
 // Nav buttons
 const navBtns = document.querySelectorAll<HTMLButtonElement>('.nav-btn');
@@ -181,7 +213,7 @@ function makeSampleEvidence(): Evidence[] {
 async function ensureCase(): Promise<Case> {
   let c = await repo.loadCase(CASE_ID);
   if (c) return c;
-  const shell: Case = { id: CASE_ID, title: CASE_TITLE, lastExportedAt: null, evidence: [], messages: [] };
+  const shell: Case = { id: CASE_ID, title: CASE_TITLE, lastExportedAt: null, evidence: [], messages: [], claims: [], legalNotes: [] };
   await repo.saveCase(shell);
   const evidence = makeSampleEvidence();
   await repo.saveEvidence(CASE_ID, evidence);
@@ -374,6 +406,115 @@ function renderGaps(): void {
   }
 }
 
+// ── Render: law tab ────────────────────────────────────────────────────────
+
+const STATUS_DISPLAY: Record<string, string> = {
+  'researching': 'Researching',
+  'ready-to-discuss': 'Ready to discuss',
+  'resolved': 'Resolved',
+  'dropped': 'Dropped'
+};
+
+function renderClaimsList(): void {
+  if (!currentCase) return;
+  const { claims } = currentCase;
+  setBadge(elClaimsCount, claims.length);
+  elClaimsList.innerHTML = '';
+  if (claims.length === 0) {
+    elClaimsEmpty.hidden = false;
+    return;
+  }
+  elClaimsEmpty.hidden = true;
+  for (const claim of claims) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'item-btn';
+    btn.setAttribute('aria-current', claim.id === selectedClaimId ? 'true' : 'false');
+    btn.innerHTML = `
+      <span class="item-btn__title">${escHtml(claim.title)}</span>
+      <span class="item-btn__meta">
+        <span class="tag">${escHtml(STATUS_DISPLAY[claim.status] ?? claim.status)}</span>
+        ${claim.questions.length > 0 ? `<span class="tag">${claim.questions.length} question${claim.questions.length !== 1 ? 's' : ''}</span>` : ''}
+      </span>`;
+    btn.addEventListener('click', () => {
+      selectedClaimId = claim.id;
+      renderClaimDetail();
+      renderClaimsList();
+    });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'btn-icon-del';
+    delBtn.setAttribute('aria-label', `Remove ${claim.title}`);
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void onRemoveClaim(claim.id);
+    });
+    li.append(btn, delBtn);
+    elClaimsList.append(li);
+  }
+}
+
+function renderClaimDetail(): void {
+  if (!currentCase || !selectedClaimId) {
+    elClaimDetail.hidden = true;
+    return;
+  }
+  const claim = currentCase.claims.find((c) => c.id === selectedClaimId);
+  if (!claim) { elClaimDetail.hidden = true; return; }
+
+  elClaimDetail.hidden = false;
+  elClaimDetailBody.innerHTML = `
+    <p class="detail__title">${escHtml(claim.title)}</p>
+    <p class="muted detail__meta">Status: ${escHtml(STATUS_DISPLAY[claim.status] ?? claim.status)} · Confidence: ${escHtml(claim.confidence)}</p>
+    ${claim.description ? `<p>${escHtml(claim.description)}</p>` : ''}
+    ${claim.questions.length > 0 ? `
+      <p class="field__label">Questions to ask</p>
+      <ul class="questions-list">${claim.questions.map((q) => `<li>${escHtml(q)}</li>`).join('')}</ul>
+    ` : '<p class="muted">No questions yet.</p>'}
+    <div class="field add-question-row">
+      <label class="field__label" for="claim-question-input">Add a question</label>
+    </div>`;
+}
+
+function renderNotesList(): void {
+  if (!currentCase) return;
+  const { legalNotes } = currentCase;
+  setBadge(elNotesCount, legalNotes.length);
+  elNotesList.innerHTML = '';
+  if (legalNotes.length === 0) {
+    elNotesEmpty.hidden = false;
+    return;
+  }
+  elNotesEmpty.hidden = true;
+  for (const note of legalNotes) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'item-btn';
+    btn.setAttribute('aria-current', note.id === selectedNoteId ? 'true' : 'false');
+    btn.innerHTML = `
+      <span class="item-btn__title">${escHtml(note.topic)}</span>
+      <span class="item-btn__meta">
+        <span class="tag">Applies: ${escHtml(note.appliesToCase)}</span>
+        ${note.source ? `<span class="muted" style="font-size:11px">${escHtml(note.source.slice(0, 40))}</span>` : ''}
+      </span>`;
+    btn.addEventListener('click', () => { selectedNoteId = note.id; renderNotesList(); });
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'btn-icon-del';
+    delBtn.setAttribute('aria-label', `Remove ${note.topic}`);
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void onRemoveLegalNote(note.id);
+    });
+    li.append(btn, delBtn);
+    elNotesList.append(li);
+  }
+}
+
 // ── Render: export ─────────────────────────────────────────────────────────
 
 function renderExport(): void {
@@ -399,6 +540,10 @@ function render(): void {
     renderEvidenceDetail();
   } else if (activeTab === 'gaps') {
     renderGaps();
+  } else if (activeTab === 'law') {
+    renderClaimsList();
+    renderClaimDetail();
+    renderNotesList();
   } else if (activeTab === 'export') {
     renderExport();
   }
@@ -582,6 +727,86 @@ function escHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+// ── Action: add claim ──────────────────────────────────────────────────────
+
+async function onAddClaim(e: Event): Promise<void> {
+  e.preventDefault();
+  const title = inpClaimTitle.value.trim();
+  if (!title || !currentCase) { inpClaimTitle.focus(); return; }
+  const claim = createClaim({
+    title,
+    description: inpClaimDesc.value.trim(),
+    status: (inpClaimStatus.value as Claim['status']) || 'researching'
+  });
+  currentCase = addClaim(currentCase, claim);
+  await repo.saveClaims(CASE_ID, currentCase.claims);
+  selectedClaimId = claim.id;
+  inpClaimTitle.value = '';
+  inpClaimDesc.value = '';
+  inpClaimStatus.value = 'researching';
+  setStatus(`Topic added: ${title}`);
+  renderClaimsList();
+  renderClaimDetail();
+}
+
+async function onRemoveClaim(claimId: string): Promise<void> {
+  if (!currentCase) return;
+  currentCase = removeClaim(currentCase, claimId);
+  await repo.saveClaims(CASE_ID, currentCase.claims);
+  if (selectedClaimId === claimId) { selectedClaimId = null; }
+  setStatus('Topic removed.');
+  renderClaimsList();
+  renderClaimDetail();
+}
+
+async function onAddClaimQuestion(): Promise<void> {
+  if (!currentCase || !selectedClaimId) return;
+  const question = inpClaimQuestion.value.trim();
+  if (!question) return;
+  const existing = currentCase.claims.find((c) => c.id === selectedClaimId);
+  if (!existing) return;
+  currentCase = updateClaim(currentCase, selectedClaimId, {
+    questions: [...existing.questions, question]
+  });
+  await repo.saveClaims(CASE_ID, currentCase.claims);
+  inpClaimQuestion.value = '';
+  setStatus('Question added.');
+  renderClaimDetail();
+  renderClaimsList();
+}
+
+// ── Action: add legal note ─────────────────────────────────────────────────
+
+async function onAddLegalNote(e: Event): Promise<void> {
+  e.preventDefault();
+  const topic = inpNoteTopic.value.trim();
+  if (!topic || !currentCase) { inpNoteTopic.focus(); return; }
+  const note = createLegalNote({
+    topic,
+    summary: inpNoteSummary.value.trim(),
+    source: inpNoteSource.value.trim(),
+    appliesToCase: (inpNoteApplies.value as LegalNote['appliesToCase']) || 'maybe'
+  });
+  currentCase = addLegalNote(currentCase, note);
+  await repo.saveLegalNotes(CASE_ID, currentCase.legalNotes);
+  selectedNoteId = note.id;
+  inpNoteTopic.value = '';
+  inpNoteSummary.value = '';
+  inpNoteSource.value = '';
+  inpNoteApplies.value = 'maybe';
+  setStatus(`Note added: ${topic}`);
+  renderNotesList();
+}
+
+async function onRemoveLegalNote(noteId: string): Promise<void> {
+  if (!currentCase) return;
+  currentCase = removeLegalNote(currentCase, noteId);
+  await repo.saveLegalNotes(CASE_ID, currentCase.legalNotes);
+  if (selectedNoteId === noteId) selectedNoteId = null;
+  setStatus('Note removed.');
+  renderNotesList();
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 
 async function init(): Promise<void> {
@@ -610,6 +835,11 @@ async function init(): Promise<void> {
   // Evidence detail
   elDetailCategory.addEventListener('change', () => { void onCategoryChange(); });
   btnConfirmReview.addEventListener('click', () => { void onConfirmReview(); });
+
+  // Law tab
+  formAddClaim.addEventListener('submit', (e) => { void onAddClaim(e); });
+  btnAddClaimQuestion.addEventListener('click', () => { void onAddClaimQuestion(); });
+  formAddNote.addEventListener('submit', (e) => { void onAddLegalNote(e); });
 
   // Export
   btnExportFull.addEventListener('click', () => { void onExport('fullCase'); });

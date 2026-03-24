@@ -31,6 +31,8 @@ export function createCase(input: { id?: string; title: string }): Case {
     title: input.title,
     lastExportedAt: null,
     evidence: [],
-    messages: []
+    messages: [],
+    claims: [],
+    legalNotes: []
   };
 }
