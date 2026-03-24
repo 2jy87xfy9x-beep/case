@@ -63,6 +63,9 @@ const inpImage = document.querySelector<HTMLInputElement>('#ev-image')!;
 const inpCsv = document.querySelector<HTMLInputElement>('#import-csv')!;
 const inpXml = document.querySelector<HTMLInputElement>('#import-xml')!;
 const elImportResult = document.querySelector<HTMLElement>('#import-result')!;
+const inpFolder = document.querySelector<HTMLInputElement>('#import-folder')!;
+const inpImages = document.querySelector<HTMLInputElement>('#import-images')!;
+const elBatchResult = document.querySelector<HTMLElement>('#batch-import-result')!;
 const inpCfgOwn = document.querySelector<HTMLInputElement>('#cfg-own')!;
 const inpCfgLandlord = document.querySelector<HTMLInputElement>('#cfg-landlord')!;
 const elUnreviewedList = document.querySelector<HTMLUListElement>('#unreviewed-list')!;
@@ -616,6 +619,55 @@ async function onAddEvidence(e: Event): Promise<void> {
   render();
 }
 
+// ── Action: batch import images ────────────────────────────────────────────
+
+async function onBatchImport(input: HTMLInputElement): Promise<void> {
+  const files = input.files;
+  input.value = ''; // allow re-selecting same folder
+  if (!files || !currentCase) return;
+
+  const imageFiles = Array.from(files).filter((f) =>
+    /^image\/(jpeg|png|webp|heic|heif)$/i.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)
+  );
+
+  if (imageFiles.length === 0) {
+    elBatchResult.textContent = 'No supported images found (JPEG, PNG, WebP, HEIC).';
+    return;
+  }
+
+  elBatchResult.textContent = `Processing 0 of ${imageFiles.length}…`;
+
+  const newEvidence: Evidence[] = [];
+  const now = new Date();
+
+  for (let i = 0; i < imageFiles.length; i++) {
+    elBatchResult.textContent = `Processing ${i + 1} of ${imageFiles.length}…`;
+
+    const file = imageFiles[i];
+    const rawName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+    const title = rawName || `Image ${i + 1}`;
+    const dateTime = file.lastModified ? new Date(file.lastModified) : new Date(NaN);
+
+    newEvidence.push({
+      id: crypto.randomUUID(),
+      dateTime,
+      title,
+      body: '',
+      requiresUserReview: true,
+      provenance: { tier: 'manual', extractedAt: now, engineVersion: 'batch-import-v1' }
+    });
+  }
+
+  const updated: Case = { ...currentCase, evidence: [...currentCase.evidence, ...newEvidence] };
+  await repo.saveEvidence(CASE_ID, updated.evidence);
+  currentCase = await repo.loadCase(CASE_ID) ?? updated;
+
+  const n = newEvidence.length;
+  elBatchResult.textContent = `Added ${n} image${n !== 1 ? 's' : ''} to case. Open "Needs review" to add descriptions and check dates.`;
+  setStatus(`Batch import: ${n} image${n !== 1 ? 's' : ''} added`);
+  render();
+}
+
 // ── Action: import CSV ─────────────────────────────────────────────────────
 
 async function onImportCsv(e: Event): Promise<void> {
@@ -965,6 +1017,8 @@ async function init(): Promise<void> {
   inpImage.addEventListener('change', onImageSelected);
   inpCsv.addEventListener('change', (e) => { void onImportCsv(e); });
   inpXml.addEventListener('change', (e) => { void onImportXml(e); });
+  inpFolder.addEventListener('change', () => { void onBatchImport(inpFolder); });
+  inpImages.addEventListener('change', () => { void onBatchImport(inpImages); });
 
   // Evidence detail
   elDetailCategory.addEventListener('change', () => { void onCategoryChange(); });
