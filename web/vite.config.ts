@@ -13,5 +13,12 @@ export default defineConfig({
   },
   server: {
     port: 5173
+  },
+  resolve: {
+    alias: {
+      // Replace Node.js built-in with a browser-compatible shim for the
+      // subset of `node:crypto` used by domain/parsers (randomUUID, createHash).
+      'node:crypto': path.resolve(__dirname, 'node-crypto-shim.ts')
+    }
   }
 });
