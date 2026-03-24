@@ -23,6 +23,26 @@
       <section id="screen-inbox" class="screen" aria-labelledby="inbox-heading">
         <h2 id="inbox-heading" class="sr-only">Inbox</h2>
 
+        <!-- Getting started orientation -->
+        <details class="card getting-started" id="getting-started">
+          <summary class="getting-started__toggle">
+            <span class="getting-started__icon" aria-hidden="true">📋</span>
+            <strong>How to use this app</strong>
+            <span class="getting-started__hint">Follow these steps in order</span>
+          </summary>
+          <ol class="getting-started__steps">
+            <li><strong>Inbox</strong> — Add evidence (documents, notes, images) and import text messages.</li>
+            <li><strong>Timeline</strong> — See all items in date order. Tie events to evidence and spot gaps.</li>
+            <li><strong>Evidence</strong> — Browse, categorise, and review each item; confirm OCR text is correct.</li>
+            <li><strong>Review</strong> — See suggested gaps in your case. Mark what to ask your lawyer about.</li>
+            <li><strong>Lawyer</strong> — Record topics to discuss and research notes to bring to your consultation.</li>
+            <li><strong>Export</strong> — Download your case as a Markdown file or backup to share with counsel.</li>
+          </ol>
+          <p class="getting-started__note">
+            <strong>Not legal advice.</strong> This app helps you <em>organise</em> materials — it does not tell you what will win in court or substitute for a lawyer.
+          </p>
+        </details>
+
         <div id="export-reminder" class="banner banner--warning banner--hidden" role="note">
           <span id="export-reminder-text"></span>
           <button type="button" id="btn-reminder-dismiss" class="banner__dismiss" aria-label="Dismiss reminder">✕</button>
@@ -156,12 +176,13 @@
 
       <!-- ── GAPS ───────────────────────────────────────────────────── -->
       <section id="screen-gaps" class="screen screen--hidden" aria-labelledby="gaps-heading">
-        <h2 id="gaps-heading" class="sr-only">Case gaps</h2>
+        <h2 id="gaps-heading" class="sr-only">Review issues</h2>
         <div class="card">
-          <h3 class="card__heading">Case gaps <span id="gaps-badge" class="badge"></span></h3>
+          <h3 class="card__heading">Review issues <span id="gaps-badge" class="badge"></span></h3>
           <p class="muted gaps-intro">
             Items below suggest documents that may strengthen your case. These are not legal
             conclusions — only organisational observations based on what you have added.
+            Use this screen to identify what to ask your lawyer about.
           </p>
           <ul id="gaps-list" class="gaps-list"></ul>
           <p id="gaps-empty" class="muted">No gaps detected. Your case looks complete.</p>
@@ -170,12 +191,13 @@
 
       <!-- ── LAW ───────────────────────────────────────────────────────── -->
       <section id="screen-law" class="screen screen--hidden" aria-labelledby="law-heading">
-        <h2 id="law-heading" class="sr-only">Law</h2>
+        <h2 id="law-heading" class="sr-only">Prepare for a lawyer</h2>
 
         <div class="card">
           <p class="law-disclaimer" role="note">
-            These are topics to bring up with your lawyer — not conclusions about your case.
-            Record what <em>you</em> want to ask or have researched, not what the app thinks.
+            Use this screen to prepare for your lawyer consultation. Record topics you want
+            to discuss and notes from your own research. These are <em>your</em> questions
+            and observations — not legal conclusions from the app.
           </p>
         </div>
 
@@ -317,13 +339,13 @@
         <span class="nav-icon" aria-hidden="true">📁</span>
         <span class="nav-label">Evidence</span>
       </button>
+      <button class="nav-btn" data-tab="gaps" type="button" id="nav-btn-gaps">
+        <span class="nav-icon" aria-hidden="true">🔍</span>
+        <span class="nav-label">Review <span id="nav-gaps-badge" class="nav-badge" aria-label="gaps detected"></span></span>
+      </button>
       <button class="nav-btn" data-tab="law" type="button">
         <span class="nav-icon" aria-hidden="true">⚖️</span>
-        <span class="nav-label">Law</span>
-      </button>
-      <button class="nav-btn" data-tab="gaps" type="button" id="nav-btn-gaps">
-        <span class="nav-icon" aria-hidden="true">⚠️</span>
-        <span class="nav-label">Gaps <span id="nav-gaps-badge" class="nav-badge" aria-label="gaps detected"></span></span>
+        <span class="nav-label">Lawyer</span>
       </button>
       <button class="nav-btn" data-tab="export" type="button">
         <span class="nav-icon" aria-hidden="true">📤</span>

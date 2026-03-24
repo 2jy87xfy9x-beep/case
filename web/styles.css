@@ -762,6 +762,67 @@ body {
   margin-bottom: 10px;
 }
 
+/* ── Getting started card ────────────────────────────────────────────── */
+
+.getting-started {
+  border-color: #c0dcc8;
+  background: #f0f7f2;
+}
+
+.getting-started__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 16px;
+  margin: -16px -16px 0;
+  border-radius: 14px 14px 0 0;
+  font-size: 14px;
+  color: #1e3d29;
+  user-select: none;
+}
+
+.getting-started__toggle::-webkit-details-marker { display: none; }
+
+details.getting-started[open] .getting-started__toggle {
+  border-bottom: 1px solid #c0dcc8;
+  margin-bottom: 14px;
+}
+
+.getting-started__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.getting-started__hint {
+  font-size: 12px;
+  color: #4a7a5a;
+  margin-left: auto;
+  font-weight: 400;
+}
+
+.getting-started__steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1a1814;
+}
+
+.getting-started__steps li {
+  margin-bottom: 4px;
+}
+
+.getting-started__note {
+  font-size: 12px;
+  color: #4a4640;
+  border-top: 1px solid #c0dcc8;
+  padding-top: 10px;
+  margin: 0;
+  line-height: 1.6;
+}
+
 /* ── Accessibility ───────────────────────────────────────────────────── */
 
 .sr-only {
