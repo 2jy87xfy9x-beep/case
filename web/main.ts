@@ -59,6 +59,7 @@ const formAddEvidence = document.querySelector<HTMLFormElement>('#add-evidence-f
 const inpTitle = document.querySelector<HTMLInputElement>('#ev-title')!;
 const inpDate = document.querySelector<HTMLInputElement>('#ev-date')!;
 const inpBody = document.querySelector<HTMLTextAreaElement>('#ev-body')!;
+const inpImage = document.querySelector<HTMLInputElement>('#ev-image')!;
 const inpCsv = document.querySelector<HTMLInputElement>('#import-csv')!;
 const inpXml = document.querySelector<HTMLInputElement>('#import-xml')!;
 const elImportResult = document.querySelector<HTMLElement>('#import-result')!;
@@ -553,6 +554,27 @@ function render(): void {
   setBadge(elNavGapsBadge, gapCount);
 }
 
+// ── Action: image selected ─────────────────────────────────────────────────
+
+function onImageSelected(): void {
+  const file = inpImage.files?.[0];
+  if (!file) return;
+
+  // Auto-populate title with filename (strip extension)
+  if (!inpTitle.value.trim()) {
+    inpTitle.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+  }
+
+  // Auto-populate date from file last-modified if date not already set
+  if (!inpDate.value && file.lastModified) {
+    const d = new Date(file.lastModified);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    inpDate.value = `${yyyy}-${mm}-${dd}`;
+  }
+}
+
 // ── Action: add evidence ───────────────────────────────────────────────────
 
 async function onAddEvidence(e: Event): Promise<void> {
@@ -566,6 +588,7 @@ async function onAddEvidence(e: Event): Promise<void> {
   const rawDate = inpDate.value;
   const dateTime = rawDate ? new Date(rawDate + 'T00:00:00') : new Date(NaN);
   const body = inpBody.value.trim();
+  const hasImage = (inpImage.files?.length ?? 0) > 0;
   const now = new Date();
 
   const ev: Evidence = {
@@ -573,7 +596,7 @@ async function onAddEvidence(e: Event): Promise<void> {
     dateTime,
     title,
     body,
-    requiresUserReview: false,
+    requiresUserReview: hasImage && !body,
     provenance: { tier: 'manual', extractedAt: now, engineVersion: 'manual-v1' }
   };
 
@@ -585,6 +608,7 @@ async function onAddEvidence(e: Event): Promise<void> {
   inpTitle.value = '';
   inpDate.value = '';
   inpBody.value = '';
+  inpImage.value = '';
   setStatus(`Added: ${title}`);
   render();
 }
@@ -829,6 +853,7 @@ async function init(): Promise<void> {
 
   // Inbox form
   formAddEvidence.addEventListener('submit', (e) => { void onAddEvidence(e); });
+  inpImage.addEventListener('change', onImageSelected);
   inpCsv.addEventListener('change', (e) => { void onImportCsv(e); });
   inpXml.addEventListener('change', (e) => { void onImportXml(e); });
 
