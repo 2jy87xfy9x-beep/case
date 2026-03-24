@@ -1,4 +1,4 @@
-import type { Case, Claim, Evidence, LegalNote, Message } from '../domain/types.js';
+import type { Case, Claim, Evidence, LegalNote, Lawyer, Message } from '../domain/types.js';
 
 export interface CaseRepository {
   saveCase(caseData: Case): Promise<void>;
@@ -11,4 +11,6 @@ export interface CaseRepository {
   listClaims(caseId: string): Promise<Claim[]>;
   saveLegalNotes(caseId: string, legalNotes: LegalNote[]): Promise<void>;
   listLegalNotes(caseId: string): Promise<LegalNote[]>;
+  saveLawyers(caseId: string, lawyers: Lawyer[]): Promise<void>;
+  listLawyers(caseId: string): Promise<Lawyer[]>;
 }

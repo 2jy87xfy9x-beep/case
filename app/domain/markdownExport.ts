@@ -190,6 +190,9 @@ export function buildMarkdownExport(caseData: Case, options: MarkdownExportOptio
   parts.push(ocrBlock(caseData));
 
   if (options.variant === 'lawyerSummary') {
+    parts.push('## Key evidence\n\n');
+    parts.push(evidenceMarkdownList(caseData.evidence));
+    parts.push('\n');
     parts.push('## Topics to discuss with your lawyer\n\n');
     parts.push('> These are organisational topics — not legal conclusions or predictions.\n\n');
     parts.push(claimsSection(caseData.claims));
