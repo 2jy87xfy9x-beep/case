@@ -82,6 +82,23 @@
           <p id="import-result" class="import-result" role="status" aria-live="polite"></p>
         </div>
 
+        <!-- Batch import images -->
+        <div class="card">
+          <h3 class="card__heading">Batch import images</h3>
+          <p class="muted" style="margin-bottom:0.75rem">Point to a folder of images and the app will create an evidence entry for each one. You can review and edit each item afterwards.</p>
+          <div class="import-row">
+            <label class="btn import-btn">
+              Select folder
+              <input type="file" id="import-folder" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" webkitdirectory hidden />
+            </label>
+            <label class="btn import-btn">
+              Select images
+              <input type="file" id="import-images" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+            </label>
+          </div>
+          <p id="batch-import-result" class="import-result" role="status" aria-live="polite"></p>
+        </div>
+
         <!-- Needs review -->
         <div class="card" id="unreviewed-card">
           <h3 class="card__heading">Needs review <span id="unreviewed-count" class="badge"></span></h3>
