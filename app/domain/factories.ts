@@ -29,6 +29,8 @@ export function createCase(input: { id?: string; title: string }): Case {
   return {
     id: input.id ?? randomUUID(),
     title: input.title,
-    lastExportedAt: null
+    lastExportedAt: null,
+    evidence: [],
+    messages: []
   };
 }

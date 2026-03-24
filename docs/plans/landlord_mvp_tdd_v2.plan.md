@@ -49,7 +49,7 @@ decisions_required_before_build:
       not the testability benefit. For a solo project the cost is low and the
       benefit (injectable fakes for OCR and storage) is real. Document this
       rationale in the repo so the decision is not revisited silently.
-    status: "unresolved — must be cleared before Phase 0"
+    status: resolved
 
   - id: decision.lawyer-entity-mvp
     question: "Is the Lawyer Contact entity and Consultation Prep module in MVP scope?"
@@ -61,7 +61,7 @@ decisions_required_before_build:
       Include a minimal Lawyer entity (name, contacted boolean, notes, questions[]).
       The questions list is low-cost and directly serves the app's core purpose.
       Full lawyer search tracker is post-MVP.
-    status: "unresolved — must be cleared before Phase 1"
+    status: resolved
 
   - id: decision.cloud-ocr-provider
     question: "Which cloud OCR provider for the post-MVP opt-in?"
