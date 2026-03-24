@@ -141,7 +141,7 @@ decisions_required_before_build:
 **Jump:** [Principles](#nav-principles) · [Architecture](#nav-architecture) · [Completion checklist](#nav-completion-checklist) · [Deferred](#nav-deferred)
 
 <details>
-<summary><strong>Phases 0–9</strong></summary>
+<summary><strong>Phases 0–9 (v1/v2 base — complete)</strong></summary>
 
 | Phase | Section |
 |------|---------|
@@ -156,6 +156,20 @@ decisions_required_before_build:
 | 7 | [Export](#nav-phase-7) |
 | 8 | [React UI](#nav-phase-8) |
 | 9 | [Playwright E2E](#nav-phase-9) |
+
+</details>
+
+<details>
+<summary><strong>Phases 10–15 (v2 build — new)</strong></summary>
+
+| Phase | Section |
+|------|---------|
+| 10 | [Domain type extensions + DB migration](#nav-phase-10) |
+| 11 | [Multi-case storage — listCases()](#nav-phase-11) |
+| 12 | [Auto-processing pipeline + claim suggester](#nav-phase-12) |
+| 13 | [New UI — Home, Case Brief, Consultation Mode, Library, Settings](#nav-phase-13) |
+| 14 | [v1 completion items](#nav-phase-14) |
+| 15 | [Playwright E2E — new screens](#nav-phase-15) |
 
 </details>
 
@@ -1018,6 +1032,413 @@ messages visible in timeline.
 
 ---
 
+---
+
+<a id="nav-phase-10"></a>
+
+## Phase 10 — Domain type extensions + DB migration ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Next: [Phase 11](#nav-phase-11)_
+
+<details>
+<summary><strong>Phase 10 — Case v2 fields, EvidenceCategory expansion, DB v4→v5</strong> (expand)</summary>
+
+All changes are additive. No v1 field is removed. Existing stored records must
+deserialize without error after the migration.
+
+### `EvidenceCategory` expansion (`app/domain/types.ts`)
+
+Add four new values to the union:
+
+```typescript
+export type EvidenceCategory =
+  | 'lease' | 'payment' | 'rent-notice' | 'fee-notice' | 'other'  // v1 — unchanged
+  | 'repair' | 'photo' | 'message' | 'amendment';                  // v2 additions
+```
+
+### `Case` type extensions (`app/domain/types.ts`)
+
+All new fields are optional so existing stored records remain valid without migration data backfill:
+
+```typescript
+// v2 additions to Case interface
+parties?: { tenant: string; landlord: string };
+property?: { address: string; unit: string; jurisdiction: string };
+tenancy?: { startDate: Date | null; monthlyRentOriginal: number | null; monthlyRentCurrent: number | null };
+clientGoal?: string;
+status?: 'ready' | 'gaps' | 'processing';
+source?: 'drop-folder' | 'upload' | 'manual' | 'mixed';
+timeline?: TimelineItem[];
+gaps?: Gap[];
+libraryRefs?: string[];
+```
+
+### DB version bump (`app/storage/IndexedDbCaseRepository.ts`)
+
+Bump `DB_VERSION` from 4 to 5. Migration function: no data transformation needed
+(all new fields are optional). Existing case records remain valid.
+
+**Tests to write (red first):**
+
+- A case stored under DB_VERSION 4 (without v2 fields) opens under DB_VERSION 5 without error and without data loss on existing fields
+- `createCase()` factory can be called without v2 fields; all new fields default to `undefined`
+- A `Case` with all v2 fields set round-trips through `saveCase` / `loadCase` without data loss
+- New `EvidenceCategory` values (`'repair'`, `'photo'`, `'message'`, `'amendment'`) are accepted by `setEvidenceCategory` without error
+- `detectGaps` still passes all existing tests with the expanded `EvidenceCategory` type
+
+</details>
+
+---
+
+<a id="nav-phase-11"></a>
+
+## Phase 11 — Multi-case storage: listCases() ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 10](#nav-phase-10) · Next: [Phase 12](#nav-phase-12)_
+
+<details>
+<summary><strong>Phase 11 — listCases() port + IndexedDB implementation</strong> (expand)</summary>
+
+The existing repository stores cases keyed by `id` in the `cases` object store.
+The new method returns all stored cases — used by the Home canvas to render
+the case list.
+
+### Port addition (`app/ports/CaseRepository.ts`)
+
+```typescript
+listCases(): Promise<Case[]>;
+```
+
+### Implementation note
+
+The `cases` object store has no secondary index — only a primary key. Use
+`objectStore('cases').getAll()` (no key argument). This is different from the
+`indexGetAll()` helper used for evidence, messages, and claims, which all have
+`caseId` indexes. Do not reach for `indexGetAll()` here.
+
+```typescript
+// IndexedDbCaseRepository.ts
+async listCases(): Promise<Case[]> {
+  return this.transaction(['cases'], 'readonly', tx =>
+    this.getAll(tx.objectStore('cases'))
+  );
+}
+```
+
+Returns full `Case` records including evidence and messages arrays (loaded from
+their stores on save, as the existing `loadCase` does). For list-view performance,
+the Home canvas renders only `id`, `title`, `status`, and `evidence.length` from
+each record — it does not join additional stores.
+
+**Tests to write (red first):**
+
+- `listCases()` on an empty database returns `[]`
+- `listCases()` with two stored cases returns both, unordered
+- A case saved with `saveCase` is returned by `listCases()`
+- The in-memory fake repository (`tests/storage/`) implements `listCases()` per the port contract
+- Existing `loadCase`, `saveCase`, `saveEvidence`, `listEvidence`, `saveMessages`, `listMessages` tests all still pass
+
+</details>
+
+---
+
+<a id="nav-phase-12"></a>
+
+## Phase 12 — Auto-processing pipeline + claim suggester ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 11](#nav-phase-11) · Next: [Phase 13](#nav-phase-13)_
+
+<details>
+<summary><strong>Phase 12 — autoProcess.ts, claimSuggester.ts</strong> (expand)</summary>
+
+This is the top-priority new capability. All functions are pure or
+have injectable dependencies. No AI — all logic is deterministic rules.
+
+### `app/application/autoProcess.ts`
+
+Entry point: receives `File[]` + the current case list + a repository reference.
+Runs the full pipeline and returns the updated (or newly created) `Case`.
+
+```
+File[]
+  → classify(file)       → EvidenceCategory + auto-label
+  → extractMeta(file)    → { date, amount, address, parties }
+  → assignToCase()       → match existing Case or create new
+  → buildTimeline()      → TimelineItem[]          ← app/domain/timeline.ts
+  → detectGaps()         → Gap[]                   ← app/domain/gapDetector.ts
+  → suggestClaims()      → Claim[]                 ← app/domain/claimSuggester.ts
+  → surfaceLibraryDocs() → string[]                ← pure function, library item IDs
+  → Case (persisted via repo)
+```
+
+### Classification rules (`classify` pure function)
+
+| Category | Extensions | Keywords (filename or extracted text) |
+|----------|-----------|---------------------------------------|
+| `lease` | PDF, DOCX | lease agreement, rental agreement, tenant, landlord, monthly rent |
+| `rent-notice` | PDF | rent increase, notice of rent, effective date |
+| `payment` | PDF, CSV | rent paid, balance, ledger, payment |
+| `fee-notice` | PDF | late fee, notice to pay, notice to quit, unlawful detainer, eviction |
+| `repair` | MSG, PDF, DOCX | repair, maintenance, fix, damage |
+| `photo` | JPG, JPEG, PNG, HEIC, WEBP | (extension only; EXIF date extracted) |
+| `message` | CSV, XML | (extension only; routed to message import path) |
+| `amendment` | PDF, DOCX | amendment, addendum + any lease keyword |
+| `other` | any | (fallback; `requiresUserReview: true`) |
+
+### Meta extraction (`extractMeta` pure function)
+
+- **Dates:** ISO (YYYY-MM-DD), US (MM/DD/YYYY), written month ("February 2024"), EXIF timestamp for photos
+- **Dollar amounts:** regex `\$\d[\d,]*(\.\d{2})?`
+- **Addresses:** street number + street name pattern (e.g. "123 Main St")
+- **Party names:** proximity to keywords "tenant", "landlord", "lessor", "lessee"
+
+### Case assignment (`assignToCase` pure function)
+
+- Match by shared address → merge into existing case
+- Match by shared party names → merge into existing case
+- No match → create new case (auto-named from address or parties)
+- If address and parties are both unknown → create new case named by upload date
+
+### `app/domain/claimSuggester.ts`
+
+Pure function. Decision tree mapping assembled case facts → suggested `Claim[]`.
+Conservative framing required (ADR-003): every claim suggestion is a "topic to
+discuss with your lawyer", not a legal conclusion.
+
+Six claim types (from `case_v2_design_spec.md` section 3):
+
+| Claim type | Trigger condition |
+|-----------|------------------|
+| Retaliatory rent increase | `repair` evidence present + `rent-notice` within 180 days after repair request date |
+| Breach of implied warranty of habitability | `repair` evidence with no landlord response message found |
+| Failure to repair within reasonable time | `repair` evidence dated > 30 days ago with no resolution evidence |
+| Wrongful eviction / unlawful detainer defense | `fee-notice` evidence with eviction keywords |
+| Illegal rent increase | `rent-notice` with extracted dollar amount and `property.jurisdiction` set |
+| Retaliation for exercising tenant rights | Legal notice evidence + `rent-notice` within 90 days |
+
+Each suggestion records: `triggeredByEvidenceIds[]`, the rule that fired, and
+`confidence: 'low' | 'medium' | 'high'` based on evidence completeness.
+
+### `surfaceLibraryDocs` pure function (in `autoProcess.ts`)
+
+Matches `Case.property.jurisdiction` and triggered claim types against a
+`LibraryItem[]` list. Returns `string[]` of matching item IDs. Library items
+have `jurisdiction` and `claimTypes[]` metadata fields.
+
+**Tests to write (red first):**
+
+_Classification:_
+- Each category rule fires correctly on a matching filename
+- Extension-only rules (photo, message) fire without keyword match
+- `amendment` requires both amendment keyword AND a lease keyword
+- Unknown file type falls through to `other` with `requiresUserReview: true`
+
+_Meta extraction:_
+- ISO date in filename → extracted correctly
+- Written month date in text body → extracted correctly
+- EXIF timestamp on photo file → extracted as `dateTime`
+- Dollar amount regex matches `$1,200`, `$950`, `$1200.00`
+- No match on any pattern → returns `{ date: null, amount: null, ... }`
+
+_Case assignment:_
+- Files sharing an address match to the same existing case
+- Files with no address and no party match create a new case
+- Creating a new case sets `source: 'drop-folder'` or `'upload'` based on intake
+
+_Pipeline integration:_
+- `autoProcess` calls `buildTimeline` (existing `timeline.ts`) after classification
+- `autoProcess` calls `detectGaps` (existing `gapDetector.ts`) after timeline build
+- `autoProcess` calls `suggestClaims` and stores result on `Case.claims`
+- `autoProcess` persists the updated case via the injected repository
+
+_Claim suggester:_
+- Each of the six claim types triggers only when its condition is met
+- No claim is suggested on an empty case
+- A claim that fires cites the evidence IDs that triggered it
+- All suggested claim strings pass the conservative framing rule (no legal conclusions)
+- `suggestClaims` is a pure function (same input → same output; no side effects)
+
+</details>
+
+---
+
+<a id="nav-phase-13"></a>
+
+## Phase 13 — New UI: Home, Case Brief, Consultation Mode, Library, Settings ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 12](#nav-phase-12) · Next: [Phase 14](#nav-phase-14)_
+
+<details>
+<summary><strong>Phase 13 — v2 web UI replacing web/</strong> (expand)</summary>
+
+The v1 `web/` shell is archived to `web/v1/` before any changes. The new UI
+replaces `web/index.html`, `web/main.ts`, and `web/styles.css` entirely.
+
+Reference: `docs/demos/case_organizer_mvp2_mockup.html` for visual treatment
+and interaction patterns.
+
+### App shell
+
+- Bottom dock: **Cases** · **Timeline** · **Gaps** · **Export** · **Settings**
+  (5 tabs — Timeline and Gaps are global views across all cases)
+- All v1 screens (Inbox, Evidence, Lawyer) are accessible within a case context,
+  not as top-level dock tabs
+
+### Screen: Home / Canvas (`screen-home`)
+
+- Top bar: "Cases" title + sync status dot (static; sync folder is OAuth-gated)
+- Case list: one row per case — name, item count + categories, status badge
+  (`ready` / `gaps` / `processing`)
+- Library entry below active cases
+- Intake toggle (dashed border): expands 2×3 grid —
+  Sync Folder (disabled, "coming soon"), Drop Folder, Upload Files,
+  Import Messages, Manual Entry, Photo Batch
+- Drop Folder and Upload Files feed `autoProcess()` from Phase 12
+- Active case row → opens Case Brief
+
+### Screen: Case Brief (`screen-brief`)
+
+Eight sections (in order):
+1. Case Summary — auto-generated; tap to edit inline
+2. Legal Framing — jurisdiction + suggested claims with citations
+3. Client Goal — `Case.clientGoal`; editable
+4. Timeline — chronological events from `Case.timeline`; source-linked
+5. Key Facts — extracted items; each traceable to source document
+6. Gaps — from `Case.gaps`; tap to mark resolved; each shows suggested question
+7. Library Docs Surfaced — from `Case.libraryRefs`; one-tap assign to case
+8. Source Files — collapsed by default; all evidence accessible
+
+Bottom bar: evidence count · gap count · **▶ Consult** · **Share ⇢** · **Export ↗**
+
+### Screen: Consultation Mode (overlay, `consult-overlay`)
+
+Full-screen overlay launched from `▶ Consult`. ESC or exit button to close.
+
+Navigation: Prev / Next buttons + 6 dot indicators + progress bar + arrow keys.
+
+| Slide | Content |
+|-------|---------|
+| 1 — Orientation | Case type, jurisdiction, `Case.clientGoal`, evidence strength bar, parties |
+| 2 — The Dispute | Plain language summary, suggested claims, library doc surfaced |
+| 3 — The Proof | Each claim with source excerpt highlighted inline; message excerpts with silence notes; photo thumbnails + EXIF dates |
+| 4 — Timeline | All `Case.timeline` events; key events highlighted; tappable source badge per event |
+| 5 — Gaps | Each `Case.gaps` item as an exact question to ask the client |
+| 6 — Ready | Status checklist; Export Package + Share action buttons |
+
+### Screen: Library (`screen-library`)
+
+- Flat list of unassigned documents, grouped by type:
+  Tenant Rights · Ordinances / Local Law · Templates · Correspondence · Research / Reference · Unassigned
+- Upload entry at top
+- Any item assignable to a case (sets `Case.libraryRefs`)
+- Items surface in Case Brief section 7 and Consultation slide 2 when
+  `jurisdiction` + `claimTypes` match
+
+### Screen: Settings (`screen-settings`)
+
+Five sections:
+1. Sync folder — Google Drive / Dropbox (disabled placeholder; "coming soon")
+2. Jurisdiction default — state + city; drives library surfacing
+3. Party defaults — tenant name pre-filled on new cases
+4. Export preferences — Markdown (v1 path) / ZIP structured package (v2 path; PDF rendering deferred) / both
+5. Reset / clear cache — clears IndexedDB state
+
+**Implementation notes:**
+- Remove hardcoded `CASE_ID = 'mvp-local-case'` from `main.ts`; all case access
+  is by dynamic ID from `listCases()` or route state
+- Settings values stored in `localStorage`; no new IndexedDB store required
+
+</details>
+
+---
+
+<a id="nav-phase-14"></a>
+
+## Phase 14 — v1 completion items ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 13](#nav-phase-13) · Next: [Phase 15](#nav-phase-15)_
+
+<details>
+<summary><strong>Phase 14 — screenshot OCR wiring + ADR-002</strong> (expand)</summary>
+
+Two items carried forward from the v1 completion checklist.
+
+### 14a — Screenshot OCR → `importSource: 'screenshot-ocr'`
+
+Wire the image screenshot path through the existing OCR pipeline when a user
+adds an image via the message import "screenshot" option:
+
+1. User selects an image in the message import flow
+2. Image passes through `prepareImageForOcr` (Phase 4)
+3. Image passes through the tiered OCR service
+4. Result is wrapped in a `Message` with `importSource: 'screenshot-ocr'`
+   and `requiresUserReview: true`
+5. Message is persisted and appears in the timeline
+
+**Tests:**
+- A JPEG passed through the screenshot path produces a `Message` with
+  `importSource: 'screenshot-ocr'`
+- The resulting message has `requiresUserReview: true`
+- The OCR pipeline is called (verify via injected fake OCR service)
+
+### 14b — ADR-002: Capacitor vs PWA
+
+Write `docs/decisions/ADR-002-capacitor-vs-pwa.md` as a standalone decision
+record. Resolution is already documented in the v2 plan frontmatter; this
+phase moves it to a canonical ADR file.
+
+Content: PWA only for MVP. Capacitor deferred post-MVP. Apple Vision OCR
+(Tier 1) unavailable without Capacitor; Tesseract is Tier 1 in practice.
+Port is ready for Capacitor addition without rewriting.
+
+</details>
+
+---
+
+<a id="nav-phase-15"></a>
+
+## Phase 15 — Playwright E2E: new screens ← NEW
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 14](#nav-phase-14) · Next: [Completion checklist](#nav-completion-checklist)_
+
+<details>
+<summary><strong>Phase 15 — E2E tests for v2 UI screens</strong> (expand)</summary>
+
+Extends `tests/e2e/` alongside the existing `happy-path.spec.ts` and
+`full-ui-validation.spec.ts`. All existing 70 E2E tests must continue to pass.
+
+**Home / Canvas (`canvas.spec.ts`):**
+- Fresh app shows empty case list with intake toggle
+- Drop Folder intake: dropping a folder of mixed files creates a case row
+- Created case row shows correct status badge (`ready` or `gaps`)
+- Library row is present and navigates to Library screen
+
+**Case Brief (`case-brief.spec.ts`):**
+- Opening a case shows all 8 sections
+- Case Summary section is present and editable
+- Timeline section shows events in chronological order
+- Gaps section shows gap items with suggested questions
+- `▶ Consult` button is present and opens Consultation Mode overlay
+
+**Consultation Mode (`consultation.spec.ts`):**
+- Overlay opens on `▶ Consult` tap
+- All 6 slides are navigable via Next / Prev buttons
+- Dot indicators update as slides change
+- ESC key closes the overlay
+- Slide 6 shows Export and Share action buttons
+
+**Library (`library.spec.ts`):**
+- Library screen shows grouped document list
+- Upload adds an item to the Unassigned group
+
+**Settings (`settings.spec.ts`):**
+- Jurisdiction field saves to localStorage and persists on reload
+- Reset / clear cache clears IndexedDB and returns to empty state
+
+</details>
+
+---
+
 <a id="nav-completion-checklist"></a>
 
 ## Completion checklist (additions to v1)
@@ -1138,6 +1559,35 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 
 </details>
 
+<details open>
+<summary><strong>V2 build (Phases 10–15)</strong></summary>
+
+<a id="nav-checklist-v2"></a>
+
+- [ ] `EvidenceCategory` expanded with `repair`, `photo`, `message`, `amendment` — [`types.ts`](../../app/domain/types.ts); [Phase 10](#nav-phase-10)
+- [ ] `Case` type extended with v2 optional fields (`parties`, `property`, `tenancy`, `clientGoal`, `status`, `source`, `timeline`, `gaps`, `libraryRefs`) — [`types.ts`](../../app/domain/types.ts); [Phase 10](#nav-phase-10)
+- [ ] DB_VERSION bumped 4→5; migration test written; existing records survive — [`IndexedDbCaseRepository.ts`](../../app/storage/IndexedDbCaseRepository.ts); [Phase 10](#nav-phase-10)
+- [ ] `listCases()` added to port and implementation using `objectStore('cases').getAll()` — [`CaseRepository.ts`](../../app/ports/CaseRepository.ts), [`IndexedDbCaseRepository.ts`](../../app/storage/IndexedDbCaseRepository.ts); [Phase 11](#nav-phase-11)
+- [ ] `classify()` pure function covers all 9 categories with tests per rule — [`autoProcess.ts`](../../app/application/autoProcess.ts); [Phase 12](#nav-phase-12)
+- [ ] `extractMeta()` pure function covers date, amount, address, party name patterns with tests — [`autoProcess.ts`](../../app/application/autoProcess.ts); [Phase 12](#nav-phase-12)
+- [ ] `assignToCase()` matches by address and party name; creates new case on no match — [`autoProcess.ts`](../../app/application/autoProcess.ts); [Phase 12](#nav-phase-12)
+- [ ] `autoProcess()` pipeline calls `buildTimeline`, `detectGaps`, `suggestClaims`, `surfaceLibraryDocs` in order — [`autoProcess.ts`](../../app/application/autoProcess.ts); [Phase 12](#nav-phase-12)
+- [ ] `claimSuggester.ts` decision tree covers all 6 claim types; conservative framing verified; pure function tested — [`claimSuggester.ts`](../../app/domain/claimSuggester.ts); [Phase 12](#nav-phase-12)
+- [ ] v1 `web/` archived to `web/v1/` before UI replacement — [Phase 13](#nav-phase-13)
+- [ ] Hardcoded `CASE_ID = 'mvp-local-case'` removed; all case access dynamic — [`web/main.ts`](../../web/main.ts); [Phase 13](#nav-phase-13)
+- [ ] Home / Canvas screen: case list, library row, intake grid (Sync Folder disabled) — [Phase 13](#nav-phase-13)
+- [ ] Case Brief screen: all 8 sections rendered; edit paths for Summary and Client Goal — [Phase 13](#nav-phase-13)
+- [ ] Consultation Mode overlay: 6 slides, Prev/Next, dot indicators, ESC to close — [Phase 13](#nav-phase-13)
+- [ ] Library screen: grouped list, upload entry, assign to case — [Phase 13](#nav-phase-13)
+- [ ] Settings screen: jurisdiction, party defaults, export preference, reset/clear cache — [Phase 13](#nav-phase-13)
+- [ ] Screenshot OCR path produces `Message` with `importSource: 'screenshot-ocr'` — [Phase 14](#nav-phase-14)
+- [ ] `docs/decisions/ADR-002-capacitor-vs-pwa.md` written — [Phase 14](#nav-phase-14)
+- [ ] Playwright E2E tests for Home, Case Brief, Consultation Mode, Library, Settings — [Phase 15](#nav-phase-15)
+- [ ] All existing unit tests still pass after v2 changes
+- [ ] All existing 70 Playwright E2E tests still pass after v2 changes
+
+</details>
+
 **All v1 checklist items** also apply and are not repeated here.
 
 ---
@@ -1175,7 +1625,8 @@ _<a href="#nav-top">↑ On this page</a> · Prev: [Completion checklist](#nav-co
 information surfaces. All decisions in `decisions_required_before_build`
 must be resolved and recorded before the relevant phase begins.*
 
-*Version: v2 — drafted as surgical update to landlord_mvp_tdd_c6ad0408.plan.md,
-aligned with design spec v2.*
+*Version: v2 (base) + v2 build extension — Phases 0–9 complete; Phases 10–15 added
+2026-03-24 to implement `case_v2_design_spec.md`. Design spec:
+`docs/superpowers/specs/2026-03-24-case-v2-design.md`.*
 
 </details>
