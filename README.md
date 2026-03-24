@@ -17,13 +17,43 @@
 | `npm run test:watch` | Re-run tests on file changes. |
 | `npm run test:e2e` | Run Playwright E2E tests (requires `npx playwright install` first). |
 | `npm run dev:ui` | Start the Vite dev server for the web UI (`web/`). |
-| `npm run build:ui` | Production build of the web UI. |
+| `npm run build:ui` | Production build of the web UI (`dist/web/`). |
+
+### Deploy (Netlify — recommended)
+
+A `netlify.toml` at the repo root configures the build automatically.
+
+1. **app.netlify.com → Add new site → Import from Git** — connect this repo.
+2. Netlify reads `netlify.toml`; no manual settings needed.
+3. Every push to the connected branch redeploys automatically.
+
+Once deployed, any device with a browser can use the app at the Netlify URL.
+
+### Use on multiple devices
+
+Data is stored locally in each browser's IndexedDB. To move your case to another device:
+
+1. Open the **Export** tab → **Move to another device**.
+2. Tap **Download backup (.json)** — saves all case data (text, messages, notes, lawyers).
+3. On the other device, open the app and tap **Restore from backup** — select the `.json` file.
+
+> **Note:** Original image files are not stored in IndexedDB (only the extracted text is kept). Re-upload any photos after restoring on a new device.
+
+### Install as a PWA
+
+The app ships a Web App Manifest (`web/manifest.json`). Once hosted:
+
+- **iOS Safari:** Share → Add to Home Screen.
+- **Android Chrome:** browser install prompt, or Menu → Add to Home Screen.
+
+The app opens fullscreen without browser chrome and behaves like a native app.
 
 ### Repo layout (high level)
 
 - **`app/`** — domain logic, application use cases, storage adapters, OCR/message ports.
-- **`web/`** — browser UI entry and Vite config.
+- **`web/`** — browser UI entry, Vite config, PWA manifest and icons.
 - **`tests/`** — Vitest specs mirroring `app/`.
+- **`netlify.toml`** — deploy and security-headers config.
 
 ### Documentation
 
@@ -31,6 +61,7 @@ Product and roadmap live under [`docs/`](docs/). Good entry points:
 
 - [Design spec v2](docs/specs/landlord_case_organizer_design_spec_v2.md)
 - [MVP TDD plan v2](docs/plans/landlord_mvp_tdd_v2.plan.md)
+- [Multi-device support report](docs/reports/implementation/multi_device_support_2026-03-24.md)
 
 </details>
 
@@ -273,7 +304,7 @@ Optional directions (to be decided in spec):
 <details>
 <summary>Click to expand</summary>
 
-**Status:** Phases 0–9 implemented — domain, storage, tiered OCR (Vision/Tesseract/Manual/Cloud), message import, gap detection, claims/legal notes, Lawyer CRUD, Markdown export, vanilla TS web UI (Phase 8 shell), and Playwright E2E scaffolding (Phase 9).
+**Status:** Phases 0–9 implemented — domain, storage, tiered OCR (Vision/Tesseract/Manual/Cloud), message import, gap detection, claims/legal notes, Lawyer CRUD, Markdown export, vanilla TS web UI (Phase 8 shell), Playwright E2E scaffolding (Phase 9), and multi-device support (PWA manifest, JSON backup/restore, Netlify deploy config).
 
 For product and technical detail, see:
 
