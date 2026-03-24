@@ -1,5 +1,6 @@
+import { getCombinedQuestions } from './claimsOps.js';
 import { detectGaps } from './gapDetector.js';
-import type { Case, Evidence, Message } from './types.js';
+import type { Case, Claim, Evidence, LegalNote, Message } from './types.js';
 
 export type ExportMarkdownVariant = 'fullCase' | 'lawyerSummary';
 
@@ -82,6 +83,72 @@ function feeHistorySection(evidence: Evidence[]): string {
   return evidenceMarkdownList(rows);
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  'researching': 'Researching',
+  'ready-to-discuss': 'Ready to discuss',
+  'resolved': 'Resolved',
+  'dropped': 'Dropped'
+};
+
+const APPLIES_LABELS: Record<string, string> = {
+  yes: 'Yes',
+  maybe: 'Maybe',
+  no: 'No'
+};
+
+function claimsSection(claims: Claim[]): string {
+  if (claims.length === 0) {
+    return '_No topics recorded. Add topics to discuss in the app._\n\n';
+  }
+  return (
+    claims
+      .map((c) => {
+        const lines: string[] = [
+          `### ${escapeMdCell(c.title)}`,
+          '',
+          `**Status:** ${STATUS_LABELS[c.status] ?? c.status}  `,
+          `**Confidence (your estimate):** ${c.confidence}`,
+          ''
+        ];
+        if (c.description) {
+          lines.push(escapeMdCell(c.description), '');
+        }
+        if (c.questions.length > 0) {
+          lines.push('**Questions to ask:**');
+          for (const q of c.questions) {
+            lines.push(`- ${escapeMdCell(q)}`);
+          }
+          lines.push('');
+        }
+        return lines.join('\n');
+      })
+      .join('\n') + '\n'
+  );
+}
+
+function legalNotesSection(notes: LegalNote[]): string {
+  if (notes.length === 0) return '';
+  const lines: string[] = ['## Research notes', ''];
+  for (const n of notes) {
+    lines.push(
+      `### ${escapeMdCell(n.topic)}`,
+      '',
+      `**Applies to case:** ${APPLIES_LABELS[n.appliesToCase] ?? n.appliesToCase}  `,
+      `**Confidence:** ${n.confidence}`,
+      ''
+    );
+    if (n.summary) lines.push(escapeMdCell(n.summary), '');
+    if (n.source) lines.push(`**Source:** ${escapeMdCell(n.source)}`, '');
+  }
+  return lines.join('\n') + '\n';
+}
+
+function questionsSection(caseData: Case): string {
+  const questions = getCombinedQuestions(caseData);
+  if (questions.length === 0) return '_No questions recorded._\n\n';
+  return questions.map((q) => `- ${escapeMdCell(q)}`).join('\n') + '\n\n';
+}
+
 function gapsSection(caseData: Case): string {
   const gaps = detectGaps(caseData);
   if (gaps.length === 0) return '';
@@ -123,12 +190,14 @@ export function buildMarkdownExport(caseData: Case, options: MarkdownExportOptio
   parts.push(ocrBlock(caseData));
 
   if (options.variant === 'lawyerSummary') {
-    parts.push('## Possible issues\n\n');
-    parts.push('_Topics to discuss with your lawyer — no structured claims are stored in this export yet._\n\n');
+    parts.push('## Topics to discuss with your lawyer\n\n');
+    parts.push('> These are organisational topics — not legal conclusions or predictions.\n\n');
+    parts.push(claimsSection(caseData.claims));
     parts.push('## Questions for lawyer\n\n');
-    parts.push('_None recorded._\n\n');
-    parts.push('## Key evidence\n\n');
-    parts.push('_Key evidence is linked to claims when claims exist; none are recorded in this version._\n\n');
+    parts.push(questionsSection(caseData));
+    if (caseData.legalNotes.length > 0) {
+      parts.push(legalNotesSection(caseData.legalNotes));
+    }
     parts.push(gapsSection(caseData));
     return parts.join('');
   }
@@ -149,11 +218,14 @@ export function buildMarkdownExport(caseData: Case, options: MarkdownExportOptio
   parts.push('\n## Evidence list\n\n');
   parts.push(evidenceMarkdownList(caseData.evidence));
 
-  parts.push('\n## Possible issues\n\n');
-  parts.push('_Topics to discuss with your lawyer — no structured claims are stored in this export yet._\n\n');
+  parts.push('\n## Topics to discuss with your lawyer\n\n');
+  parts.push('> These are organisational topics — not legal conclusions or predictions.\n\n');
+  parts.push(claimsSection(caseData.claims));
 
   parts.push('## Questions for lawyer\n\n');
-  parts.push('_None recorded._\n\n');
+  parts.push(questionsSection(caseData));
+
+  parts.push(legalNotesSection(caseData.legalNotes));
 
   parts.push(gapsSection(caseData));
 

@@ -106,7 +106,16 @@ decisions_required_before_build:
       a claim." Use "Status: researching" not "Status: viable."
       If a string implies the app has evaluated the legal merit of
       anything, rewrite it.
-    status: "unresolved — must be cleared before Phase 6"
+    resolution: >
+      Cleared via conservative framing rule (Option B self-certification).
+      Every string in the claims module was reviewed against the rule:
+      section header is "Topics to discuss with your lawyer" (not "Claims" or
+      "Possible violations"); status values are "Researching / Ready to discuss /
+      Resolved / Dropped" (notebook-style, no legal assessment); disclaimer
+      appears in-app and in all exports; the app does not generate topics
+      automatically — only the user adds them; no string implies the app has
+      evaluated legal merit. See docs/decisions/ADR-003-claims-framing.md.
+    status: "resolved — conservative framing rule applied; see ADR-003"
 
   - id: decision.github-pages-sync
     question: "Implement GitHub Pages encrypted share link?"
@@ -1112,8 +1121,8 @@ Implementation status reflects the repo as of the last plan update (domain/appli
 
 <a id="nav-checklist-legal"></a>
 
-- [ ] `gate.claimsModuleLegalReview` cleared and resolution recorded — blocks [Phase 6](#nav-phase-6)
-- [ ] All claims module strings reviewed against conservative framing rule
+- [x] `gate.claimsModuleLegalReview` cleared — conservative framing rule applied (Option B self-cert); see [`docs/decisions/ADR-003-claims-framing.md`](../decisions/ADR-003-claims-framing.md)
+- [x] All claims module strings reviewed against conservative framing rule — passed
 
 </details>
 

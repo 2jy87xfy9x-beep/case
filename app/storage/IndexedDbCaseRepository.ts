@@ -1,7 +1,7 @@
-import type { Case, Evidence, Message } from '../domain/types.js';
+import type { Case, Claim, Evidence, LegalNote, Message } from '../domain/types.js';
 import type { CaseRepository } from '../ports/CaseRepository.js';
 
-type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages'> & {
+type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes'> & {
   lastExportedAt: string | null;
 };
 
@@ -20,7 +20,10 @@ type PersistedMessage = Omit<Message, 'dateTime'> & {
   dateTime: string;
 };
 
-const DB_VERSION = 2;
+type PersistedClaim = Claim & { caseId: string };
+type PersistedLegalNote = LegalNote & { caseId: string };
+
+const DB_VERSION = 3;
 
 export class IndexedDbCaseRepository implements CaseRepository {
   constructor(private readonly dbName = 'case-organizer') {}
@@ -43,8 +46,13 @@ export class IndexedDbCaseRepository implements CaseRepository {
 
     if (!caseRecord) return null;
 
-    const [evidence, messages] = await Promise.all([this.listEvidence(caseId), this.listMessages(caseId)]);
-    return deserializeCase(caseRecord, evidence, messages);
+    const [evidence, messages, claims, legalNotes] = await Promise.all([
+      this.listEvidence(caseId),
+      this.listMessages(caseId),
+      this.listClaims(caseId),
+      this.listLegalNotes(caseId)
+    ]);
+    return deserializeCase(caseRecord, evidence, messages, claims, legalNotes);
   }
 
   async saveEvidence(caseId: string, evidence: Evidence[]): Promise<void> {
@@ -83,6 +91,42 @@ export class IndexedDbCaseRepository implements CaseRepository {
     return items.map(deserializeMessage);
   }
 
+  async saveClaims(caseId: string, claims: Claim[]): Promise<void> {
+    const db = await this.openDb();
+    await transactionDone(db, ['claims'], 'readwrite', (tx) => {
+      const store = tx.objectStore('claims');
+      for (const item of claims) {
+        store.put({ ...item, caseId });
+      }
+    });
+  }
+
+  async listClaims(caseId: string): Promise<Claim[]> {
+    const db = await this.openDb();
+    const items = await transactionValue<PersistedClaim[]>(db, ['claims'], 'readonly', (tx) =>
+      indexGetAll(tx.objectStore('claims').index('caseId'), caseId)
+    );
+    return items.map(({ caseId: _id, ...claim }) => claim as Claim);
+  }
+
+  async saveLegalNotes(caseId: string, legalNotes: LegalNote[]): Promise<void> {
+    const db = await this.openDb();
+    await transactionDone(db, ['legalNotes'], 'readwrite', (tx) => {
+      const store = tx.objectStore('legalNotes');
+      for (const item of legalNotes) {
+        store.put({ ...item, caseId });
+      }
+    });
+  }
+
+  async listLegalNotes(caseId: string): Promise<LegalNote[]> {
+    const db = await this.openDb();
+    const items = await transactionValue<PersistedLegalNote[]>(db, ['legalNotes'], 'readonly', (tx) =>
+      indexGetAll(tx.objectStore('legalNotes').index('caseId'), caseId)
+    );
+    return items.map(({ caseId: _id, ...note }) => note as LegalNote);
+  }
+
   private openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, DB_VERSION);
@@ -107,6 +151,16 @@ export class IndexedDbCaseRepository implements CaseRepository {
         if (!db.objectStoreNames.contains('messages')) {
           const messages = db.createObjectStore('messages', { keyPath: 'id' });
           messages.createIndex('caseId', 'caseId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('claims')) {
+          const claims = db.createObjectStore('claims', { keyPath: 'id' });
+          claims.createIndex('caseId', 'caseId', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('legalNotes')) {
+          const legalNotes = db.createObjectStore('legalNotes', { keyPath: 'id' });
+          legalNotes.createIndex('caseId', 'caseId', { unique: false });
         }
 
         if (request.oldVersion < 2) {
@@ -138,13 +192,21 @@ function serializeCase(caseData: Case): PersistedCase {
   };
 }
 
-function deserializeCase(caseData: PersistedCase, evidence: Evidence[], messages: Message[]): Case {
+function deserializeCase(
+  caseData: PersistedCase,
+  evidence: Evidence[],
+  messages: Message[],
+  claims: Claim[],
+  legalNotes: LegalNote[]
+): Case {
   return {
     id: caseData.id,
     title: caseData.title,
     lastExportedAt: caseData.lastExportedAt ? new Date(caseData.lastExportedAt) : null,
     evidence,
-    messages
+    messages,
+    claims,
+    legalNotes
   };
 }
 
