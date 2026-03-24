@@ -335,6 +335,11 @@ interface Gap {
 }
 ```
 
+</details>
+
+<details>
+<summary><strong>1d — Lawyer entity</strong></summary>
+
 ### 1d. Lawyer entity (resolve decision.lawyer-entity-mvp first)
 
 If the decision is "in MVP", add:
@@ -355,6 +360,8 @@ interface Lawyer {
 
 If the decision is "post-MVP", add a `TODO` comment referencing the deferred
 decision and skip Lawyer from all Phase 1 tests.
+
+</details>
 
 </details>
 
@@ -648,6 +655,9 @@ async function prepareImageForOcr(file: File): Promise<File>
 ## Phase 5 — Categorization / gap detection ← MODIFIED
 
 _<a href="#nav-top">↑ On this page</a> · Prev: [Phase 4](#nav-phase-4) · Next: [Phase 6](#nav-phase-6) · [Checklist: gaps](#nav-checklist-domain)_
+
+<details>
+<summary><strong>Phase 5 — gap detection & surface ids</strong> (expand)</summary>
 
 V1 content (categorization) unchanged. Add gap detection.
 
