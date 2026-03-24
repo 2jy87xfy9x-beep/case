@@ -15,6 +15,7 @@
 |--------|----------------|
 | `npm test` | Run the full Vitest suite once. |
 | `npm run test:watch` | Re-run tests on file changes. |
+| `npm run test:e2e` | Run Playwright E2E tests (requires `npx playwright install` first). |
 | `npm run dev:ui` | Start the Vite dev server for the web UI (`web/`). |
 | `npm run build:ui` | Production build of the web UI. |
 
@@ -222,7 +223,7 @@ Evidence not organized
 
 # Draft product direction
 
-*Nothing here is implemented yet. Details live in `/docs`.*
+*Phases 0–9 are implemented. Details live in [`docs/`](docs/).*
 
 <details>
 <summary>Click to expand</summary>
@@ -272,7 +273,7 @@ Optional directions (to be decided in spec):
 <details>
 <summary>Click to expand</summary>
 
-**Status:** initial TypeScript MVP scaffold implemented (domain + parsers + OCR ports).
+**Status:** Phases 0–9 implemented — domain, storage, tiered OCR (Vision/Tesseract/Manual/Cloud), message import, gap detection, claims/legal notes, Lawyer CRUD, Markdown export, vanilla TS web UI (Phase 8 shell), and Playwright E2E scaffolding (Phase 9).
 
 For product and technical detail, see:
 
