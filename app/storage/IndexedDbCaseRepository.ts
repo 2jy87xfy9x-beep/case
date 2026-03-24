@@ -7,7 +7,7 @@ type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'cl
 
 type PersistedEvidence = Omit<Evidence, 'dateTime' | 'provenance'> & {
   caseId: string;
-  dateTime: string;
+  dateTime: string | null;
   provenance: {
     tier: Evidence['provenance']['tier'];
     extractedAt: string;
@@ -241,7 +241,7 @@ function serializeEvidence(caseId: string, evidence: Evidence): PersistedEvidenc
   return {
     ...evidence,
     caseId,
-    dateTime: evidence.dateTime.toISOString(),
+    dateTime: Number.isFinite(evidence.dateTime.getTime()) ? evidence.dateTime.toISOString() : null,
     provenance: {
       ...evidence.provenance,
       extractedAt: evidence.provenance.extractedAt.toISOString()
@@ -252,7 +252,7 @@ function serializeEvidence(caseId: string, evidence: Evidence): PersistedEvidenc
 function deserializeEvidence(evidence: PersistedEvidence): Evidence {
   return {
     ...evidence,
-    dateTime: new Date(evidence.dateTime),
+    dateTime: evidence.dateTime ? new Date(evidence.dateTime) : new Date(NaN),
     provenance: {
       ...evidence.provenance,
       extractedAt: new Date(evidence.provenance.extractedAt)

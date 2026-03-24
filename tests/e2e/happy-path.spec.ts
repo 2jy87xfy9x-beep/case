@@ -12,6 +12,7 @@
  * Notes:
  *  - The app uses a fixed local case (CASE_ID = 'mvp-local-case') — no "create case" step.
  *  - IndexedDB is reset between test runs by clearing the origin storage in beforeEach.
+ *  - On a fresh case, ensureCase() seeds 2 sample evidence items. Counts include these.
  *  - The CSV fixture contains 3 valid rows across 2 threads (1 row has a missing date and
  *    is skipped by the parser), so 3 messages are expected in the timeline.
  */
@@ -44,8 +45,9 @@ test('adds evidence via form and evidence appears in timeline', async ({ page })
   await page.waitForSelector('#screen-timeline:not(.screen--hidden)', { state: 'visible' });
 
   // ── Step 3: verify evidence in timeline ──────────────────────────────────
+  // 1 new item + 2 seeded sample items = 3 total; new item sorts first (Jan 2026).
   const timelineItems = page.locator('#timeline-list li');
-  await expect(timelineItems).toHaveCount(1);
+  await expect(timelineItems).toHaveCount(3);
   await expect(timelineItems.first()).toContainText('Rent increase letter Jan 2026');
 });
 
@@ -68,9 +70,9 @@ test('imports iMazing CSV and messages appear in timeline', async ({ page }) => 
   await page.waitForSelector('#screen-timeline:not(.screen--hidden)', { state: 'visible' });
 
   // ── Step 4: verify messages in timeline ──────────────────────────────────
-  // The CSV fixture has 3 valid rows (1 missing-date row is skipped by parser).
+  // 3 CSV messages + 2 seeded sample evidence items = 5 total.
   const timelineItems = page.locator('#timeline-list li');
-  await expect(timelineItems).toHaveCount(3);
+  await expect(timelineItems).toHaveCount(5);
 });
 
 test('full happy path: add evidence + import CSV, both visible in timeline', async ({ page }) => {
@@ -89,9 +91,9 @@ test('full happy path: add evidence + import CSV, both visible in timeline', asy
   await page.click('[data-tab="timeline"]');
   await page.waitForSelector('#screen-timeline:not(.screen--hidden)', { state: 'visible' });
 
-  // 1 evidence item + 3 messages = 4 total timeline entries.
+  // 1 new evidence + 3 CSV messages + 2 seeded sample evidence = 6 total.
   const timelineItems = page.locator('#timeline-list li');
-  await expect(timelineItems).toHaveCount(4);
+  await expect(timelineItems).toHaveCount(6);
 
   // Evidence title must appear.
   await expect(page.locator('#timeline-list')).toContainText('Signed lease 2025');
