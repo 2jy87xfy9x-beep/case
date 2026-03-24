@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2d5a3d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Case" />
+    <link rel="manifest" href="/manifest.json" />
     <title>Case Organizer</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -260,6 +264,23 @@
             <strong>Text only.</strong> Original documents remain on your device and are the
             authoritative source. This export contains extracted or manually entered text only.
           </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card__heading">Move to another device</h3>
+          <p class="muted">Download a backup of all case data (text, messages, notes, lawyers) to open on another device. Original image files are not included — re-upload them after restoring.</p>
+
+          <div class="export-actions">
+            <button type="button" id="btn-backup-download" class="btn btn--primary">
+              Download backup (.json)
+            </button>
+            <label class="btn" id="lbl-backup-restore">
+              Restore from backup
+              <input type="file" id="inp-backup-restore" accept=".json" class="sr-only" />
+            </label>
+          </div>
+
+          <div id="backup-restore-status" class="muted" aria-live="polite"></div>
         </div>
       </section>
 

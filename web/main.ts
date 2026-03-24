@@ -101,6 +101,9 @@ const elExportReminderText = document.querySelector<HTMLElement>('#export-remind
 const elLastExported = document.querySelector<HTMLElement>('#last-exported-label')!;
 const btnExportFull = document.querySelector<HTMLButtonElement>('#btn-export-full')!;
 const btnExportSummary = document.querySelector<HTMLButtonElement>('#btn-export-summary')!;
+const btnBackupDownload = document.querySelector<HTMLButtonElement>('#btn-backup-download')!;
+const inpBackupRestore = document.querySelector<HTMLInputElement>('#inp-backup-restore')!;
+const elBackupRestoreStatus = document.querySelector<HTMLElement>('#backup-restore-status')!;
 
 // Law tab
 const formAddClaim = document.querySelector<HTMLFormElement>('#add-claim-form')!;
@@ -741,6 +744,112 @@ async function onExport(variant: 'fullCase' | 'lawyerSummary'): Promise<void> {
   }
 }
 
+// ── Action: backup download ─────────────────────────────────────────────────
+
+async function onBackupDownload(): Promise<void> {
+  const assembled = await repo.loadCase(CASE_ID);
+  if (!assembled) { setStatus('No case to back up.'); return; }
+
+  setStatus('Preparing backup…');
+  try {
+    // Serialize dates to ISO strings so JSON round-trips cleanly
+    const payload = JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      case: {
+        ...assembled,
+        lastExportedAt: assembled.lastExportedAt?.toISOString() ?? null,
+        evidence: assembled.evidence.map(ev => ({
+          ...ev,
+          dateTime: Number.isFinite(ev.dateTime.getTime()) ? ev.dateTime.toISOString() : null,
+          provenance: { ...ev.provenance, extractedAt: ev.provenance.extractedAt.toISOString() }
+        })),
+        messages: assembled.messages.map(m => ({ ...m, dateTime: m.dateTime.toISOString() }))
+      }
+    }, null, 2);
+
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const filename = `case-backup-${stamp}.json`;
+    const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a);
+    a.click(); a.remove(); URL.revokeObjectURL(url);
+    setStatus(`Backup saved: ${filename}`);
+  } catch (err) {
+    setStatus(err instanceof Error ? err.message : 'Backup failed.');
+  }
+}
+
+// ── Action: backup restore ──────────────────────────────────────────────────
+
+async function onBackupRestore(e: Event): Promise<void> {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  elBackupRestoreStatus.textContent = 'Reading file…';
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text) as {
+      version: number;
+      case: {
+        id: string;
+        title: string;
+        lastExportedAt: string | null;
+        evidence: Array<Record<string, unknown>>;
+        messages: Array<Record<string, unknown>>;
+        claims: Array<Record<string, unknown>>;
+        legalNotes: Array<Record<string, unknown>>;
+        lawyers: Array<Record<string, unknown>>;
+      };
+    };
+    if (payload.version !== 1 || !payload.case?.id) {
+      throw new Error('Unrecognised backup format.');
+    }
+    const c = payload.case;
+    // Re-hydrate dates
+    const restoredCase = {
+      ...c,
+      lastExportedAt: c.lastExportedAt ? new Date(c.lastExportedAt) : null,
+      evidence: (c.evidence as Array<{
+        dateTime: string | null;
+        provenance: { extractedAt: string; tier: string; engineVersion?: string };
+        [key: string]: unknown;
+      }>).map(ev => ({
+        ...ev,
+        dateTime: ev.dateTime ? new Date(ev.dateTime) : new Date(NaN),
+        provenance: { ...ev.provenance, extractedAt: new Date(ev.provenance.extractedAt) }
+      })),
+      messages: (c.messages as Array<{ dateTime: string; [key: string]: unknown }>).map(m => ({
+        ...m,
+        dateTime: new Date(m.dateTime)
+      })),
+      claims: c.claims,
+      legalNotes: c.legalNotes,
+      lawyers: c.lawyers
+    };
+
+    await repo.saveCase(restoredCase as Parameters<typeof repo.saveCase>[0]);
+    await repo.saveEvidence(c.id, restoredCase.evidence as Parameters<typeof repo.saveEvidence>[1]);
+    await repo.saveMessages(c.id, restoredCase.messages as Parameters<typeof repo.saveMessages>[1]);
+    await repo.saveClaims(c.id, restoredCase.claims as Parameters<typeof repo.saveClaims>[1]);
+    await repo.saveLegalNotes(c.id, restoredCase.legalNotes as Parameters<typeof repo.saveLegalNotes>[1]);
+    await repo.saveLawyers(c.id, restoredCase.lawyers as Parameters<typeof repo.saveLawyers>[1]);
+
+    currentCase = await repo.loadCase(CASE_ID);
+    elBackupRestoreStatus.textContent = `Restored. ${restoredCase.evidence.length} evidence items, ${restoredCase.messages.length} messages.`;
+    setStatus('Backup restored.');
+    render();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Restore failed.';
+    elBackupRestoreStatus.textContent = `Error: ${msg}`;
+    setStatus(msg);
+  } finally {
+    // Reset input so the same file can be re-selected if needed
+    inpBackupRestore.value = '';
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function escHtml(str: string): string {
@@ -869,6 +978,8 @@ async function init(): Promise<void> {
   // Export
   btnExportFull.addEventListener('click', () => { void onExport('fullCase'); });
   btnExportSummary.addEventListener('click', () => { void onExport('lawyerSummary'); });
+  btnBackupDownload.addEventListener('click', () => { void onBackupDownload(); });
+  inpBackupRestore.addEventListener('change', (e) => { void onBackupRestore(e); });
 
   try {
     currentCase = await ensureCase();
