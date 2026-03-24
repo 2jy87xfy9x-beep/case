@@ -151,4 +151,12 @@ describe('detectGaps (Phase 5 — positive-evidence-only)', () => {
     expect(GAP_SURFACE_IDS).toContain('gap.missingLease');
     expect(GAP_SURFACE_IDS).toContain('section.caseGaps');
   });
+
+  it('evidence with category "repair" does not cause detectGaps to throw', () => {
+    const caseData = createCase({ id: 'c11', title: 'Repair category' });
+    caseData.evidence = [
+      evidence({ id: 'e1', category: 'repair', title: 'Repair request', body: 'Broken heater' })
+    ];
+    expect(() => detectGaps(caseData)).not.toThrow();
+  });
 });

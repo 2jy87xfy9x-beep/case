@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../../app/domain/factories.js';
-import type { Case, Claim, Evidence, LegalNote, Lawyer, Message } from '../../app/domain/types.js';
+import type { Case, Claim, Evidence, Gap, LegalNote, Lawyer, Message, TimelineItem } from '../../app/domain/types.js';
 import type { CaseRepository } from '../../app/ports/CaseRepository.js';
 import { IndexedDbCaseRepository } from '../../app/storage/IndexedDbCaseRepository.js';
 
@@ -234,5 +234,150 @@ describe('IndexedDbCaseRepository smoke', () => {
       };
       req.onerror = () => reject(req.error);
     });
+  });
+
+  it('DB migration test: case stored without v2 fields opens under DB_VERSION 5 without error and existing fields are preserved (fake-indexeddb)', async () => {
+    let fakeIndexedDb: typeof import('fake-indexeddb') | null = null;
+    try {
+      fakeIndexedDb = await import('fake-indexeddb');
+    } catch {
+      expect(true).toBe(true);
+      return;
+    }
+
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = fakeIndexedDb.indexedDB;
+
+    const dbName = `test-db-v5-migration-${Date.now()}`;
+
+    // Seed at version 1 with a case that has no v2 fields
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(dbName, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains('cases')) {
+          db.createObjectStore('cases', { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(['cases'], 'readwrite');
+        tx.objectStore('cases').put({ id: 'old-case-1', title: 'Pre-v2 Case', lastExportedAt: null });
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+
+    // Open with current repo (DB_VERSION 5) — must not throw
+    const repo = new IndexedDbCaseRepository(dbName);
+    const loaded = await repo.loadCase('old-case-1');
+
+    // Existing v1 fields are preserved
+    expect(loaded).not.toBeNull();
+    expect(loaded?.id).toBe('old-case-1');
+    expect(loaded?.title).toBe('Pre-v2 Case');
+    expect(loaded?.lastExportedAt).toBeNull();
+    // v2 optional fields absent (undefined) — no error
+    expect(loaded?.parties).toBeUndefined();
+    expect(loaded?.status).toBeUndefined();
+  });
+
+  it('round-trip test: Case with all v2 fields saves and loads without data loss (fake-indexeddb)', async () => {
+    let fakeIndexedDb: typeof import('fake-indexeddb') | null = null;
+    try {
+      fakeIndexedDb = await import('fake-indexeddb');
+    } catch {
+      expect(true).toBe(true);
+      return;
+    }
+
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = fakeIndexedDb.indexedDB;
+
+    const dbName = `test-db-v2-roundtrip-${Date.now()}`;
+
+    const evidenceItem: Evidence = {
+      id: 'ev-1',
+      dateTime: new Date('2026-01-01T00:00:00Z'),
+      title: 'Lease',
+      body: 'Signed lease',
+      requiresUserReview: false,
+      category: 'repair',
+      provenance: { tier: 'manual', extractedAt: new Date('2026-01-01T00:00:00Z') }
+    };
+
+    const timelineItem: TimelineItem = { kind: 'evidence', ...evidenceItem };
+
+    const gapItem: Gap = {
+      id: 'gap.missingLease',
+      displayName: 'Missing Lease',
+      description: 'No lease found',
+      severity: 'notable'
+    };
+
+    const fullCase: Case = {
+      id: 'v2-case-1',
+      title: 'Full v2 Case',
+      lastExportedAt: null,
+      evidence: [],
+      messages: [],
+      claims: [],
+      legalNotes: [],
+      lawyers: [],
+      parties: { tenant: 'Alice', landlord: 'Bob' },
+      property: { address: '123 Main St', unit: 'Apt 4', jurisdiction: 'CA' },
+      tenancy: { startDate: new Date('2024-01-01T00:00:00Z'), monthlyRentOriginal: 1500, monthlyRentCurrent: 1600 },
+      clientGoal: 'Recover deposit',
+      status: 'gaps',
+      source: 'upload',
+      timeline: [timelineItem],
+      gaps: [gapItem],
+      libraryRefs: ['ref-a', 'ref-b']
+    };
+
+    const repo = new IndexedDbCaseRepository(dbName);
+    await repo.saveCase(fullCase);
+    const loaded = await repo.loadCase('v2-case-1');
+
+    expect(loaded).not.toBeNull();
+    expect(loaded?.id).toBe('v2-case-1');
+    expect(loaded?.title).toBe('Full v2 Case');
+    expect(loaded?.parties).toEqual({ tenant: 'Alice', landlord: 'Bob' });
+    expect(loaded?.property).toEqual({ address: '123 Main St', unit: 'Apt 4', jurisdiction: 'CA' });
+    expect(loaded?.clientGoal).toBe('Recover deposit');
+    expect(loaded?.status).toBe('gaps');
+    expect(loaded?.source).toBe('upload');
+    expect(loaded?.libraryRefs).toEqual(['ref-a', 'ref-b']);
+    expect(loaded?.gaps).toHaveLength(1);
+    expect(loaded?.gaps?.[0].id).toBe('gap.missingLease');
+  });
+});
+
+describe('EvidenceCategory v2 values', () => {
+  it('setEvidenceCategory accepts new v2 category values without TypeScript error', async () => {
+    const { setEvidenceCategory } = await import('../../app/domain/evidenceOps.js');
+    const { createCase } = await import('../../app/domain/factories.js');
+
+    const evidence: Evidence = {
+      id: 'e1',
+      dateTime: new Date('2026-01-01T00:00:00Z'),
+      title: 'Doc',
+      body: 'Body',
+      requiresUserReview: false,
+      provenance: { tier: 'manual', extractedAt: new Date('2026-01-01T00:00:00Z') }
+    };
+
+    const baseCase = { ...createCase({ id: 'c-v2', title: 'V2 Cat' }), evidence: [evidence] };
+
+    const c1 = setEvidenceCategory(baseCase, 'e1', 'repair');
+    expect(c1.evidence[0].category).toBe('repair');
+
+    const c2 = setEvidenceCategory(baseCase, 'e1', 'photo');
+    expect(c2.evidence[0].category).toBe('photo');
+
+    const c3 = setEvidenceCategory(baseCase, 'e1', 'message');
+    expect(c3.evidence[0].category).toBe('message');
+
+    const c4 = setEvidenceCategory(baseCase, 'e1', 'amendment');
+    expect(c4.evidence[0].category).toBe('amendment');
   });
 });

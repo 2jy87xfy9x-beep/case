@@ -17,7 +17,9 @@ export interface Message {
 export type OcrMethod = 'vision' | 'tesseract' | 'manual' | 'cloud';
 
 /** User- or review-assigned bucket for gap detection and export (Phase 5). */
-export type EvidenceCategory = 'lease' | 'payment' | 'rent-notice' | 'fee-notice' | 'other';
+export type EvidenceCategory =
+  | 'lease' | 'payment' | 'rent-notice' | 'fee-notice' | 'other'  // v1 — unchanged
+  | 'repair' | 'photo' | 'message' | 'amendment';                  // v2 additions
 
 export interface Evidence {
   id: string;
@@ -80,6 +82,16 @@ export interface Case {
   claims: Claim[];
   legalNotes: LegalNote[];
   lawyers: Lawyer[];
+  // v2 additions — all optional so existing stored records remain valid
+  parties?: { tenant: string; landlord: string };
+  property?: { address: string; unit: string; jurisdiction: string };
+  tenancy?: { startDate: Date | null; monthlyRentOriginal: number | null; monthlyRentCurrent: number | null };
+  clientGoal?: string;
+  status?: 'ready' | 'gaps' | 'processing';
+  source?: 'drop-folder' | 'upload' | 'manual' | 'mixed';
+  timeline?: TimelineItem[];
+  gaps?: Gap[];
+  libraryRefs?: string[];
 }
 
 export interface Gap {
