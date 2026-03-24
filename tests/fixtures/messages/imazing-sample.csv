@@ -1,0 +1,5 @@
+Date,Sender,Text,Conversation
+2026-01-01T00:00:00Z,+15551230000,"Please pay by Friday",landlord-thread
+2026-01-01T00:01:00Z,Me,"I will pay tomorrow",landlord-thread
+,Me,"bad row missing date",landlord-thread
+2026-01-01T00:02:00Z,+15557654321,"Plumber update",maintenance-thread
