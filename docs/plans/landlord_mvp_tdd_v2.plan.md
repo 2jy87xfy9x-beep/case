@@ -35,7 +35,8 @@ decisions_required_before_build:
     options:
       - "PWA only — Vision unavailable; Tesseract is Tier 1 in practice"
       - "Capacitor wrapper — Vision available; adds native build pipeline"
-    status: unresolved
+    resolution: "PWA only. Capacitor deferred to post-MVP."
+    status: resolved
 
   - id: decision.architecture-complexity
     question: "Keep ports/adapters layering or simplify to direct module imports?"
@@ -48,7 +49,7 @@ decisions_required_before_build:
       not the testability benefit. For a solo project the cost is low and the
       benefit (injectable fakes for OCR and storage) is real. Document this
       rationale in the repo so the decision is not revisited silently.
-    status: unresolved
+    status: "unresolved — must be cleared before Phase 0"
 
   - id: decision.lawyer-entity-mvp
     question: "Is the Lawyer Contact entity and Consultation Prep module in MVP scope?"
@@ -60,7 +61,64 @@ decisions_required_before_build:
       Include a minimal Lawyer entity (name, contacted boolean, notes, questions[]).
       The questions list is low-cost and directly serves the app's core purpose.
       Full lawyer search tracker is post-MVP.
-    status: unresolved
+    status: "unresolved — must be cleared before Phase 1"
+
+  - id: decision.cloud-ocr-provider
+    question: "Which cloud OCR provider for the post-MVP opt-in?"
+    impact: "Privacy policy, subprocessor disclosure, per-image pricing."
+    resolution: >
+      Deferred until cloud OCR is pulled into scope. When ready, prefer
+      Google Cloud Vision over AWS Textract for single-image document
+      uploads (better accuracy on real-world photos; Textract pricing
+      favors batch). Triggering this decision requires: privacy policy
+      update, subprocessor disclosure, explicit user opt-in UI, and DPIA
+      review.
+    status: "deferred — do not implement until post-MVP"
+
+  - id: decision.export-includes-images
+    question: "Should export include original images or text only?"
+    resolution: >
+      Text only for MVP. Original images remain on device as the
+      authoritative source (stated in disclaimers). Lawyers reviewing
+      the export before consultation need the timeline and text content,
+      not embedded images. If a lawyer requests specific photos, share
+      them separately via Files app or AirDrop. Image-inclusive export
+      is a post-MVP option.
+    status: resolved
+
+  - id: gate.claimsModuleLegalReview
+    question: "Has the claims module copy been reviewed for UPL risk?"
+    impact: >
+      Blocks Phase 6. The risk is not the code — it is the strings
+      shown to the user. Section headers, status labels, and framing
+      language must not imply legal analysis or conclusions.
+    how_to_clear: >
+      Option A: Get an informal review from a tenant rights org or
+      legal aid clinic. They will often do this for free for a
+      non-commercial personal tool.
+      Option B (if no reviewer available): Apply the conservative
+      framing rule below and self-certify.
+    conservative_framing_rule: >
+      Every string in the claims module must pass this test: does it
+      sound like a filing system or a notebook, not a legal assessment?
+      Use "Things to bring up with your lawyer" not "Possible
+      violations." Use "You noted this issue" not "This may constitute
+      a claim." Use "Status: researching" not "Status: viable."
+      If a string implies the app has evaluated the legal merit of
+      anything, rewrite it.
+    status: "unresolved — must be cleared before Phase 6"
+
+  - id: decision.github-pages-sync
+    question: "Implement GitHub Pages encrypted share link?"
+    resolution: >
+      No. Excluded from MVP and from near-term post-MVP scope. The
+      encryption requirement (cannot push plaintext sensitive legal
+      documents to a public repo) adds meaningful complexity that is
+      not justified by the use case. If a sharing mechanism is needed
+      post-MVP, the first step is a password-protected HTML export
+      sent via email or AirDrop — not a sync pipeline. Revisit only
+      if a specific sharing need cannot be met by file export.
+    status: "resolved — excluded"
 
 ---
 
@@ -227,17 +285,13 @@ The v1 plan specified a single Tesseract.js wrapper. This phase now defines
 a **tiered OCR port** that the rest of the system depends on, plus
 infrastructure implementations for each tier.
 
-### Resolve decision.capacitor-vs-pwa before this phase
+### Platform decision: PWA only (Capacitor deferred)
 
-The available tiers depend on the deployment target:
-
-| Decision | Tier 1 available | Tier 1 in practice |
-|---|---|---|
-| PWA only | No | Tesseract.js |
-| Capacitor wrapper | Yes | Apple Vision |
-
-Write the port so the tier-selection logic is testable regardless of which
-decision is made. The infrastructure implementations are what change.
+Apple Vision (Tier 1) is not available in a PWA. Tesseract.js is therefore
+Tier 1 in practice for MVP. Manual caption remains a first-class alternative.
+The `OcrService` port and tier-selector logic are written as if Vision could
+exist (so Capacitor can be added post-MVP without rewriting the port), but no
+Vision infrastructure module is implemented in MVP.
 
 ### Port definition
 
@@ -267,11 +321,13 @@ Each lives in its own module under `app/ocr/`:
 
 ```
 app/ocr/
-  vision/index.ts          — Capacitor plugin wrapper (Tier 1)
-  tesseract/index.ts       — Tesseract.js wrapper (Tier 2)
-  manual/index.ts          — Passthrough for user-supplied text (Tier 3)
-  cloud/index.ts           — Cloud OCR opt-in stub (Tier 4, post-MVP)
-  tiered/index.ts          — Selects best available tier automatically
+  vision/index.ts     — DEFERRED (requires Capacitor; post-MVP)
+  tesseract/index.ts  — Tier 1 for MVP (PWA)
+  manual/index.ts     — Tier 2 for MVP
+  cloud/index.ts      — DEFERRED (post-MVP opt-in). Preferred provider:
+                        Google Cloud Vision. Do not implement until privacy
+                        policy and DPIA are complete.
+  tiered/index.ts     — Selects best available tier automatically
 ```
 
 ### Tier selector logic (pure, testable)
@@ -290,7 +346,9 @@ function selectTier(
 
 **Tests to write (red first):**
 
-- When Vision is available, `selectTier` returns `'vision'`
+- When Vision is available (future Capacitor path), `selectTier` returns
+  `'vision'` — write this test now so the port contract is proved even though
+  Vision is not implemented in MVP
 - When Vision is unavailable and Tesseract is available, returns `'tesseract'`
 - When only manual is available, returns `'manual'`
 - Cloud is never selected unless `userPreference === 'cloud'` is explicit
@@ -351,11 +409,17 @@ app/messages/
 
 ### iMazing CSV format (expected columns)
 
-Based on publicly documented iMazing export format. Confirm column names
-against a real export before finalising parser — flag as a test fixture
-requirement.
+**Important:** Do not write the parser against the publicly documented iMazing
+CSV format. Column names have changed across iMazing versions. Before writing
+any parser code, export a real iMazing CSV from the version installed on your
+device and check it into `tests/fixtures/messages/imazing-sample.csv` (redact
+any personal content first). The parser tests must run against this fixture
+file, not against an assumed schema. If the fixture file does not exist, the
+parser tests must fail loudly with a clear message: "Fixture file missing —
+export a real iMazing CSV first."
 
-Expected columns: `Date`, `Sender`, `Text`, `Service` (iMessage/SMS), optionally `Attachment`.
+Use the fixture’s actual column headers when implementing `parseImazingCsv`;
+document any optional columns you discover in code comments.
 
 ```typescript
 function parseImazingCsv(csvText: string): Message[]
@@ -373,6 +437,9 @@ function parseSmsXml(xmlText: string): Message[]
 ### Tests to write (red first — all parsers are pure functions):
 
 **iMazing CSV parser:**
+- `tests/fixtures/messages/imazing-sample.csv` exists — if not, test suite
+  exits with: `"Missing fixture: export imazing-sample.csv from your device
+  before running parser tests"`
 - Empty CSV → empty array, no throw
 - Single message row → one `Message` with correct `dateTime`, `sender`, `direction`, `body`
 - 50 message rows → 50 `Message` entities
@@ -467,6 +534,15 @@ evidence and returns an array of `Gap` objects representing likely-missing
 items. It does not draw legal conclusions — it notes organizational
 absences.
 
+### Gap detector design principle: positive-evidence-only
+
+A gap is only flagged when the existing evidence implies something should
+exist but doesn't. Never flag a gap just because a field is empty or a document
+type hasn't been uploaded. For example: do not flag "missing lease" on every
+new case — only flag it when a rent notice or fee notice is present (which
+implies a tenancy and therefore a lease exists). This keeps gaps feeling like
+useful observations rather than nagging. When in doubt, do not add the rule.
+
 ### Gap rules (seed set — extend with tests per rule)
 
 | Gap id | Condition | Display name |
@@ -474,16 +550,15 @@ absences.
 | `gap.missingLease` | Has any rent notice OR fee notice BUT no evidence tagged `lease` | "No lease or rental agreement found" |
 | `gap.missingPaymentRecord` | Has a fee notice BUT no evidence tagged `payment` | "No payment records found" |
 | `gap.missingRentIncreaseNotice` | Has evidence with extracted text matching rent increase keywords BUT category is not `rent-notice` | "Possible rent increase — no formal notice found" |
-| `gap.undatedEvidence` | More than 2 evidence items have no confirmed date | "Several documents have no confirmed date" |
-| `gap.noMessages` | Case has zero `Message` entities | "No text messages or communications imported" |
+| `gap.noConfirmedDates` | More than half of evidence items have no confirmed date AND the case has 3 or more evidence items | "Most documents have no confirmed date — adding dates helps build your timeline" |
 
 **Tests to write (red first):**
 - Case with a rent notice evidence item but no lease-tagged evidence → returns
   `Gap` with `id: 'gap.missingLease'`
 - Case with a lease evidence item and a rent notice → does not return
   `gap.missingLease`
-- Empty case (no evidence, no messages) → returns gaps for missing common
-  items without throwing
+- A case with no evidence at all returns an empty `Gap[]` — the detector does
+  not flag gaps on an empty case
 - All `Gap` objects have non-empty `id`, `displayName`, and `description`
 - `detectGaps` is a pure function (same input → same output; no side effects)
 
@@ -496,14 +571,17 @@ Add to the surface registry:
 'gap.missingLease'
 'gap.missingPaymentRecord'
 'gap.missingRentIncreaseNotice'
-'gap.undatedEvidence'
-'gap.noMessages'
+'gap.noConfirmedDates'
 'section.caseGaps'   // the UI section that renders gap suggestions
 ```
 
 ---
 
 ## Phase 6 — Claims and legal notes (unchanged from v1)
+
+**Gate: `gate.claimsModuleLegalReview` must be cleared before this phase
+begins.** See `decisions_required_before_build` for how to clear it. Do not
+write claims module UI copy until this gate is resolved.
 
 No structural changes. Confirm that claim and legal note domain tests link
 to v2 spec section headings (not v1), since section anchors may have changed.
@@ -548,6 +626,11 @@ UI layer reads `needsExportReminder` to decide whether to show the banner.
 - Gaps section appears in output only when `detectGaps` returns non-empty
 - All exports include the disclaimer block and OCR caveat (strings tested
   in snapshot or exact match)
+- Markdown output does not contain any base64 image data or `![` image syntax
+  referencing uploaded files
+- Export includes the "text only" disclaimer string: "Original documents
+  remain on your device and are the authoritative source. This export contains
+  extracted or manually entered text only."
 - Export does not throw if `lastExportedAt` is null
 
 ### Export variants (update from v1)
@@ -555,6 +638,14 @@ UI layer reads `needsExportReminder` to decide whether to show the banner.
 Add `export.lawyerSummary` as a distinct variant from `export.fullCase`.
 The summary contains: Claims, Questions, Key evidence (linked to claims
 only). It omits: full evidence list, raw communication log.
+
+**MVP export format: text only**
+
+Exports contain text content, timeline, and metadata. Original images are not
+embedded. All exports include the disclaimer: "Original documents remain on
+your device and are the authoritative source. This export contains extracted
+or manually entered text only." This disclaimer is required in every export
+variant and must be tested in Phase 7 snapshot/string tests.
 
 ---
 
@@ -703,10 +794,12 @@ messages visible in timeline.
 - [ ] Tier selector logic is a pure function with full test coverage
 - [ ] Tesseract implementation produces `requiresUserReview: true`
 - [ ] Manual caption path produces a valid `OcrResult` with same shape
-- [ ] Vision implementation stubbed (or real, depending on Capacitor decision)
+- [ ] Vision implementation noted as deferred; port contract test written
 - [ ] All results carry provenance: `tier`, `extractedAt`, `engineVersion`
 
 **Text message import**
+- [ ] Real iMazing CSV fixture checked into `tests/fixtures/messages/` (personal
+  content redacted)
 - [ ] iMazing CSV parser written and tested (unit; pure function)
 - [ ] SMS XML parser written and tested (unit; pure function)
 - [ ] Deduplication logic defined and tested
@@ -718,6 +811,10 @@ messages visible in timeline.
 - [ ] Full case export includes Gaps section
 - [ ] Export reminder banner logic tested (unit + RTL)
 - [ ] Lawyer packet variant (`export.lawyerSummary`) differs from full case export
+
+**Legal gates**
+- [ ] `gate.claimsModuleLegalReview` cleared and resolution recorded
+- [ ] All claims module strings reviewed against conservative framing rule
 
 **Platform**
 - [ ] decision.capacitor-vs-pwa recorded in `docs/decisions/`
@@ -731,9 +828,13 @@ messages visible in timeline.
 
 ## Deferred items (post-MVP, do not add tests)
 
+- Apple Vision OCR (Tier 1) — requires Capacitor wrapper; port is ready,
+  infrastructure module not implemented
 - Cloud OCR (Tier 4) — stub the interface, do not implement
+- Image-inclusive export (embed original photos in export file)
 - PDF export
-- GitHub Pages encrypted share link
+- GitHub Pages encrypted share link — excluded from near-term scope; see
+  `decision.github-pages-sync`
 - Android SMS XML import (parser is written in Phase 3.5 but may need
   real-device testing deferred)
 - App Store distribution
