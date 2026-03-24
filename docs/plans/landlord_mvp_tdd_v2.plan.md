@@ -124,7 +124,43 @@ decisions_required_before_build:
 
 # TDD Plan: Landlord Case Organizer MVP — v2
 
+<a id="nav-top"></a>
+
+<details open>
+<summary><strong>On this page</strong> (navigation)</summary>
+
+**Jump:** [Principles](#nav-principles) · [Architecture](#nav-architecture) · [Completion checklist](#nav-completion-checklist) · [Deferred](#nav-deferred)
+
+<details>
+<summary><strong>Phases 0–9</strong></summary>
+
+| Phase | Section |
+|------|---------|
+| 0 | [Test harness](#nav-phase-0) |
+| 1 | [Domain + timeline](#nav-phase-1) |
+| 2 | [IndexedDB storage](#nav-phase-2) |
+| 3 | [OCR wrapper](#nav-phase-3) |
+| 3.5 | [Text message import](#nav-phase-3-5) |
+| 4 | [Upload pipeline](#nav-phase-4) |
+| 5 | [Gap detection](#nav-phase-5) |
+| 6 | [Claims / legal notes](#nav-phase-6) |
+| 7 | [Export](#nav-phase-7) |
+| 8 | [React UI](#nav-phase-8) |
+| 9 | [Playwright E2E](#nav-phase-9) |
+
+</details>
+
+- [What changed from v1](#nav-what-changed)
+- [Principles](#nav-principles)
+- [Architecture decision](#nav-architecture)
+
+</details>
+
+<a id="nav-what-changed"></a>
+
 ## What changed from v1 and why
+
+_<a href="#nav-top">↑ On this page</a> · Next: [Principles](#nav-principles)_
 
 Design spec v2 introduced six material changes that break alignment with the
 original plan. This document patches each one surgically. Unchanged phases from
@@ -143,7 +179,11 @@ full content.
 
 ---
 
+<a id="nav-principles"></a>
+
 ## Principles (unchanged from v1)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [What changed](#nav-what-changed) · Next: [Architecture](#nav-architecture)_
 
 Red–green–refactor for every behavior. No production code without a prior
 failing test. Behavior-focused tests on real modules. Mock only slow or
@@ -152,7 +192,11 @@ shipped behavior is not only mocks.
 
 ---
 
+<a id="nav-architecture"></a>
+
 ## Architecture decision (record here before build)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Principles](#nav-principles) · Next: [Phase 0](#nav-phase-0)_
 
 Resolve `decision.architecture-complexity` before writing any code. The
 recommendation is to keep ports/adapters with this rationale written into
@@ -167,13 +211,21 @@ recommendation is to keep ports/adapters with this rationale written into
 
 ---
 
+<a id="nav-phase-0"></a>
+
 ## Phase 0 — Test harness (unchanged from v1)
+
+_<a href="#nav-top">↑ On this page</a> · Next: [Phase 1](#nav-phase-1)_
 
 No changes. Proceed as specified in v1 plan.
 
 ---
 
+<a id="nav-phase-1"></a>
+
 ## Phase 1 — Domain model and timeline ← MODIFIED
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 0](#nav-phase-0) · Next: [Phase 2](#nav-phase-2)_
 
 All v1 content applies. The following additions are required.
 
@@ -270,7 +322,11 @@ decision and skip Lawyer from all Phase 1 tests.
 
 ---
 
+<a id="nav-phase-2"></a>
+
 ## Phase 2 — IndexedDB storage adapter (unchanged from v1)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 1](#nav-phase-1) · Next: [Phase 3](#nav-phase-3)_
 
 No changes to structure or test strategy. Extend the schema to include the
 `messages` object store and the new `lastExportedAt` field on cases when
@@ -279,7 +335,11 @@ Phase 1 additions are complete. Write a migration test from the v1 schema
 
 ---
 
+<a id="nav-phase-3"></a>
+
 ## Phase 3 — OCR wrapper ← REWRITTEN
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 2](#nav-phase-2) · Next: [Phase 3.5](#nav-phase-3-5)_
 
 The v1 plan specified a single Tesseract.js wrapper. This phase now defines
 a **tiered OCR port** that the rest of the system depends on, plus
@@ -385,7 +445,11 @@ Manual entry is not a fallback — it is an equally valid input path. The
 
 ---
 
+<a id="nav-phase-3-5"></a>
+
 ## Phase 3.5 — Text message import ← NEW PHASE
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 3](#nav-phase-3) · Next: [Phase 4](#nav-phase-4)_
 
 This phase is entirely new. It sits between Phase 3 (OCR) and Phase 4
 (upload pipeline) because text message import is higher priority than OCR
@@ -474,7 +538,11 @@ with `importSource: 'screenshot-ocr'` and `requiresUserReview: true`.
 
 ---
 
+<a id="nav-phase-4"></a>
+
 ## Phase 4 — Upload → evidence pipeline ← MODIFIED
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 3.5](#nav-phase-3-5) · Next: [Phase 5](#nav-phase-5)_
 
 All v1 content applies. The following modifications are required.
 
@@ -517,7 +585,11 @@ async function prepareImageForOcr(file: File): Promise<File>
 
 ---
 
+<a id="nav-phase-5"></a>
+
 ## Phase 5 — Categorization / gap detection ← MODIFIED
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 4](#nav-phase-4) · Next: [Phase 6](#nav-phase-6) · [Checklist: gaps](#nav-checklist-domain)_
 
 V1 content (categorization) unchanged. Add gap detection.
 
@@ -577,7 +649,11 @@ Add to the surface registry:
 
 ---
 
+<a id="nav-phase-6"></a>
+
 ## Phase 6 — Claims and legal notes (unchanged from v1)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 5](#nav-phase-5) · Next: [Phase 7](#nav-phase-7)_
 
 **Gate: `gate.claimsModuleLegalReview` must be cleared before this phase
 begins.** See `decisions_required_before_build` for how to clear it. Do not
@@ -588,7 +664,11 @@ to v2 spec section headings (not v1), since section anchors may have changed.
 
 ---
 
+<a id="nav-phase-7"></a>
+
 ## Phase 7 — Export ← MODIFIED
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 6](#nav-phase-6) · Next: [Phase 8](#nav-phase-8) · [Checklist: export](#nav-checklist-export)_
 
 V1 covered Markdown export as a lawyer packet. V2 elevates export to serve
 two distinct purposes: **lawyer packet** and **data backup**. These use the
@@ -649,7 +729,11 @@ variant and must be tested in Phase 7 snapshot/string tests.
 
 ---
 
+<a id="nav-phase-8"></a>
+
 ## Phase 8 — React UI ← MODIFIED
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 7](#nav-phase-7) · Next: [Phase 9](#nav-phase-9) · [Checklist: platform / QA](#nav-checklist-platform)_
 
 ### Mobile-first build order
 
@@ -757,7 +841,12 @@ surface ids.
 
 ### Mobile QA gate (manual, not automated)
 
+<a id="nav-mobile-qa"></a>
+
 Before any release, perform manual QA on a real iPhone (not simulator):
+
+<details>
+<summary><strong>iPhone QA checklist</strong> (expand)</summary>
 
 - [ ] Upload a camera photo and confirm OCR or manual caption flow works
 - [ ] Import a real iMazing CSV export and confirm messages appear in timeline
@@ -767,11 +856,17 @@ Before any release, perform manual QA on a real iPhone (not simulator):
 - [ ] App is usable offline (upload, review, notes, timeline all function)
 - [ ] Export reminder banner appears after simulating 7-day gap
 
-This gate must be green before tagging any release candidate.
+</details>
+
+This gate must be green before tagging any release candidate. See also [Completion checklist → Platform](#nav-checklist-platform).
 
 ---
 
+<a id="nav-phase-9"></a>
+
 ## Phase 9 — Playwright E2E (unchanged from v1)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 8](#nav-phase-8) · Next: [Completion checklist](#nav-completion-checklist)_
 
 No structural changes. Expand the happy path to include one message import
 step: create case → upload fixture → import fixture CSV → evidence and
@@ -779,54 +874,118 @@ messages visible in timeline.
 
 ---
 
+<a id="nav-completion-checklist"></a>
+
 ## Completion checklist (additions to v1)
 
-**Domain additions**
-- [ ] `Message` entity defined with all fields from v2 data model
-- [ ] `Case.lastExportedAt` field present and tested
-- [ ] `Gap` type defined
-- [ ] `needsExportReminder` pure function written and tested
-- [ ] `detectGaps` pure function written and tested with seed rule set
-- [ ] Timeline builder handles mixed `Evidence[]` and `Message[]` inputs
+_<a href="#nav-top">↑ On this page</a> · Prev: [Phase 9](#nav-phase-9) · Next: [Deferred](#nav-deferred)_
 
-**OCR tiering**
-- [ ] `OcrService` port defined in `app/ports/`
-- [ ] Tier selector logic is a pure function with full test coverage
-- [ ] Tesseract implementation produces `requiresUserReview: true`
-- [ ] Manual caption path produces a valid `OcrResult` with same shape
-- [ ] Vision implementation noted as deferred; port contract test written
-- [ ] All results carry provenance: `tier`, `extractedAt`, `engineVersion`
+Implementation status reflects the repo as of the last plan update (domain/application/tests; **no React UI yet**). Adjust checkboxes when scope changes.
 
-**Text message import**
-- [ ] Real iMazing CSV fixture checked into `tests/fixtures/messages/` (personal
-  content redacted)
-- [ ] iMazing CSV parser written and tested (unit; pure function)
-- [ ] SMS XML parser written and tested (unit; pure function)
-- [ ] Deduplication logic defined and tested
-- [ ] Messages persist via port and appear in timeline
-- [ ] Screenshot fallback uses existing OCR pipeline; produces `importSource: 'screenshot-ocr'`
+<details open>
+<summary><strong>Domain additions</strong></summary>
 
-**Export**
-- [ ] `case.lastExportedAt` updated after every successful export
-- [ ] Full case export includes Gaps section
-- [ ] Export reminder banner logic tested (unit + RTL)
+<a id="nav-checklist-domain"></a>
+
+- [x] `Message` entity defined with all fields from v2 data model — [`app/domain/types.ts`](../../app/domain/types.ts)
+- [x] `Case.lastExportedAt` field present and tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts), [`domain.test.ts`](../../tests/domain/domain.test.ts)
+- [x] `Gap` type defined — [`types.ts`](../../app/domain/types.ts)
+- [x] `needsExportReminder` pure function written and tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts)
+- [x] `detectGaps` pure function written and tested with seed rule set — [`gapDetector.ts`](../../app/domain/gapDetector.ts), [`gapDetector.test.ts`](../../tests/domain/gapDetector.test.ts); see [Phase 5](#nav-phase-5)
+- [x] Timeline builder handles mixed `Evidence[]` and `Message[]` inputs — [`timeline.ts`](../../app/domain/timeline.ts)
+- [x] `Evidence.category` for gap rules — [`types.ts`](../../app/domain/types.ts); UI to set categories: [Phase 8](#nav-phase-8)
+
+</details>
+
+<details>
+<summary><strong>OCR tiering</strong></summary>
+
+<a id="nav-checklist-ocr"></a>
+
+- [x] `OcrService` port defined in `app/ports/` — [`OcrService.ts`](../../app/ports/OcrService.ts)
+- [x] Tier selector logic is a pure function with full test coverage — [`selectTier.ts`](../../app/ocr/tiered/selectTier.ts), [`ocr.test.ts`](../../tests/ocr/ocr.test.ts)
+- [x] Tesseract implementation produces `requiresUserReview: true` — [`tesseract/index.ts`](../../app/ocr/tesseract/index.ts)
+- [x] Manual caption path produces a valid `OcrResult` with same shape — [`manual/index.ts`](../../app/ocr/manual/index.ts)
+- [x] Vision implementation noted as deferred; port contract test written (`selectTier` prefers `vision` when listed) — [Phase 3](#nav-phase-3)
+- [x] All results carry provenance: `tier`, `extractedAt`, `engineVersion` — upload path: [`uploadPipeline.ts`](../../app/application/uploadPipeline.ts)
+
+</details>
+
+<details>
+<summary><strong>Text message import</strong></summary>
+
+<a id="nav-checklist-messages"></a>
+
+- [x] Real iMazing CSV fixture checked into `tests/fixtures/messages/` (personal content redacted)
+- [x] iMazing CSV parser written and tested (unit; pure function) — [`imazingCsv.ts`](../../app/messages/parsers/imazingCsv.ts)
+- [x] SMS XML parser written and tested (unit; pure function) — [`smsXml.ts`](../../app/messages/parsers/smsXml.ts)
+- [x] Deduplication logic defined and tested — [`importMessages.ts`](../../app/messages/importMessages.ts)
+- [x] Messages persist via repository port (`saveMessages` / `listMessages`) and merge into timeline in domain — [`CaseRepository`](../../app/ports/CaseRepository.ts), [`IndexedDbCaseRepository`](../../app/storage/IndexedDbCaseRepository.ts); **UI timeline screen:** [Phase 8](#nav-phase-8)
+- [ ] Screenshot fallback uses existing OCR pipeline; produces `importSource: 'screenshot-ocr'` (type exists; **end-to-end flow not wired**)
+
+</details>
+
+<details>
+<summary><strong>Storage & pipeline (related)</strong></summary>
+
+<a id="nav-checklist-storage"></a>
+
+- [x] IndexedDB adapter + v1→v2 migration test — [Phase 2](#nav-phase-2), [`IndexedDbCaseRepository.ts`](../../app/storage/IndexedDbCaseRepository.ts)
+- [x] `prepareImageForOcr` + pipeline calls OCR after preprocess — [Phase 4](#nav-phase-4), [`prepareImageForOcr.ts`](../../app/application/prepareImageForOcr.ts)
+- [ ] Optional: basic contrast preprocessing (spec mentions; not implemented)
+
+</details>
+
+<details>
+<summary><strong>Export</strong></summary>
+
+<a id="nav-checklist-export"></a>
+
+- [ ] `case.lastExportedAt` updated after every successful export (orchestration + persistence; domain helper exists — [`markCaseExported`](../../app/domain/exportReminder.ts))
+- [ ] Full case export includes Gaps section — [Phase 7](#nav-phase-7)
+- [x] Export reminder **pure function** tested — [`exportReminder.ts`](../../app/domain/exportReminder.ts); **RTL / banner:** [Phase 8](#nav-phase-8)
 - [ ] Lawyer packet variant (`export.lawyerSummary`) differs from full case export
 
-**Legal gates**
-- [ ] `gate.claimsModuleLegalReview` cleared and resolution recorded
+</details>
+
+<details>
+<summary><strong>Product surface ids (gaps)</strong></summary>
+
+- [x] Gap-related ids registered — [`app/product-surface/ids.ts`](../../app/product-surface/ids.ts) (see [Phase 5](#nav-phase-5))
+
+</details>
+
+<details>
+<summary><strong>Legal gates</strong></summary>
+
+<a id="nav-checklist-legal"></a>
+
+- [ ] `gate.claimsModuleLegalReview` cleared and resolution recorded — blocks [Phase 6](#nav-phase-6)
 - [ ] All claims module strings reviewed against conservative framing rule
 
-**Platform**
-- [ ] decision.capacitor-vs-pwa recorded in `docs/decisions/`
-- [ ] decision.architecture-complexity recorded in `docs/decisions/`
-- [ ] decision.lawyer-entity-mvp recorded and reflected in Phase 1 + Phase 8
-- [ ] Manual iPhone QA checklist completed and signed off before release
+</details>
+
+<details>
+<summary><strong>Platform & decisions</strong></summary>
+
+<a id="nav-checklist-platform"></a>
+
+- [x] `decision.architecture-complexity` recorded — [`docs/decisions/ADR-001-architecture.md`](../decisions/ADR-001-architecture.md)
+- [ ] `decision.capacitor-vs-pwa` mirrored as standalone decision file under `docs/decisions/` (currently **resolved in this plan’s frontmatter only**)
+- [x] `decision.lawyer-entity-mvp` reflected in domain types — [`types.ts`](../../app/domain/types.ts) (`Lawyer`); **Consultation Prep UI:** [Phase 8](#nav-phase-8)
+- [ ] Manual iPhone QA checklist completed and signed off before release — [Phase 8 — Mobile QA gate](#nav-mobile-qa)
+
+</details>
 
 **All v1 checklist items** also apply and are not repeated here.
 
 ---
 
+<a id="nav-deferred"></a>
+
 ## Deferred items (post-MVP, do not add tests)
+
+_<a href="#nav-top">↑ On this page</a> · Prev: [Completion checklist](#nav-completion-checklist)_
 
 - Apple Vision OCR (Tier 1) — requires Capacitor wrapper; port is ready,
   infrastructure module not implemented
