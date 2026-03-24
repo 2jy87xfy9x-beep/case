@@ -1,4 +1,4 @@
-import type { Case, Claim, Evidence, LegalNote, Message } from '../domain/types.js';
+import type { Case, Claim, Evidence, LegalNote, Lawyer, Message } from '../domain/types.js';
 import type { CaseRepository } from '../ports/CaseRepository.js';
 
 type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes'> & {
@@ -22,8 +22,9 @@ type PersistedMessage = Omit<Message, 'dateTime'> & {
 
 type PersistedClaim = Claim & { caseId: string };
 type PersistedLegalNote = LegalNote & { caseId: string };
+type PersistedLawyer = Lawyer & { caseId: string };
 
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export class IndexedDbCaseRepository implements CaseRepository {
   constructor(private readonly dbName = 'case-organizer') {}
@@ -46,13 +47,14 @@ export class IndexedDbCaseRepository implements CaseRepository {
 
     if (!caseRecord) return null;
 
-    const [evidence, messages, claims, legalNotes] = await Promise.all([
+    const [evidence, messages, claims, legalNotes, lawyers] = await Promise.all([
       this.listEvidence(caseId),
       this.listMessages(caseId),
       this.listClaims(caseId),
-      this.listLegalNotes(caseId)
+      this.listLegalNotes(caseId),
+      this.listLawyers(caseId)
     ]);
-    return deserializeCase(caseRecord, evidence, messages, claims, legalNotes);
+    return deserializeCase(caseRecord, evidence, messages, claims, legalNotes, lawyers);
   }
 
   async saveEvidence(caseId: string, evidence: Evidence[]): Promise<void> {
@@ -127,6 +129,24 @@ export class IndexedDbCaseRepository implements CaseRepository {
     return items.map(({ caseId: _id, ...note }) => note as LegalNote);
   }
 
+  async saveLawyers(caseId: string, lawyers: Lawyer[]): Promise<void> {
+    const db = await this.openDb();
+    await transactionDone(db, ['lawyers'], 'readwrite', (tx) => {
+      const store = tx.objectStore('lawyers');
+      for (const item of lawyers) {
+        store.put({ ...item, caseId });
+      }
+    });
+  }
+
+  async listLawyers(caseId: string): Promise<Lawyer[]> {
+    const db = await this.openDb();
+    const items = await transactionValue<PersistedLawyer[]>(db, ['lawyers'], 'readonly', (tx) =>
+      indexGetAll(tx.objectStore('lawyers').index('caseId'), caseId)
+    );
+    return items.map(({ caseId: _id, ...lawyer }) => lawyer as Lawyer);
+  }
+
   private openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, DB_VERSION);
@@ -163,6 +183,11 @@ export class IndexedDbCaseRepository implements CaseRepository {
           legalNotes.createIndex('caseId', 'caseId', { unique: false });
         }
 
+        if (!db.objectStoreNames.contains('lawyers')) {
+          const lawyers = db.createObjectStore('lawyers', { keyPath: 'id' });
+          lawyers.createIndex('caseId', 'caseId', { unique: false });
+        }
+
         if (request.oldVersion < 2) {
           const casesStore = tx.objectStore('cases');
           const cursorRequest = casesStore.openCursor();
@@ -197,7 +222,8 @@ function deserializeCase(
   evidence: Evidence[],
   messages: Message[],
   claims: Claim[],
-  legalNotes: LegalNote[]
+  legalNotes: LegalNote[],
+  lawyers: Lawyer[]
 ): Case {
   return {
     id: caseData.id,
@@ -206,7 +232,8 @@ function deserializeCase(
     evidence,
     messages,
     claims,
-    legalNotes
+    legalNotes,
+    lawyers
   };
 }
 

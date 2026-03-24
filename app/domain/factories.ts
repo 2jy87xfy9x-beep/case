@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Case, Message, MessageDirection, MessageImportSource, MessageSender } from './types.js';
+import type { Case, Lawyer, Message, MessageDirection, MessageImportSource, MessageSender } from './types.js';
 
 export function createMessage(input: {
   threadId: string;
@@ -33,6 +33,29 @@ export function createCase(input: { id?: string; title: string }): Case {
     evidence: [],
     messages: [],
     claims: [],
-    legalNotes: []
+    legalNotes: [],
+    lawyers: []
+  };
+}
+
+export function createLawyer(input: {
+  name: string;
+  firm?: string;
+  phoneOrEmail?: string;
+  consultationType?: Lawyer['consultationType'];
+  notes?: string;
+  status?: string;
+  id?: string;
+}): Lawyer {
+  return {
+    id: input.id ?? randomUUID(),
+    name: input.name,
+    firm: input.firm ?? '',
+    phoneOrEmail: input.phoneOrEmail ?? '',
+    contacted: false,
+    consultationType: input.consultationType ?? 'unknown',
+    notes: input.notes ?? '',
+    status: input.status ?? '',
+    questions: []
   };
 }

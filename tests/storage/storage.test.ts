@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCase } from '../../app/domain/factories.js';
-import type { Case, Claim, Evidence, LegalNote, Message } from '../../app/domain/types.js';
+import type { Case, Claim, Evidence, LegalNote, Lawyer, Message } from '../../app/domain/types.js';
 import type { CaseRepository } from '../../app/ports/CaseRepository.js';
 import { IndexedDbCaseRepository } from '../../app/storage/IndexedDbCaseRepository.js';
 
@@ -10,6 +10,7 @@ class InMemoryCaseRepository implements CaseRepository {
   private readonly messages = new Map<string, Message[]>();
   private readonly claims = new Map<string, Claim[]>();
   private readonly legalNotes = new Map<string, LegalNote[]>();
+  private readonly lawyers = new Map<string, Lawyer[]>();
 
   async saveCase(caseData: Case): Promise<void> {
     this.cases.set(caseData.id, structuredClone(caseData));
@@ -49,6 +50,14 @@ class InMemoryCaseRepository implements CaseRepository {
 
   async listLegalNotes(caseId: string): Promise<LegalNote[]> {
     return structuredClone(this.legalNotes.get(caseId) ?? []);
+  }
+
+  async saveLawyers(caseId: string, lawyers: Lawyer[]): Promise<void> {
+    this.lawyers.set(caseId, structuredClone(lawyers));
+  }
+
+  async listLawyers(caseId: string): Promise<Lawyer[]> {
+    return structuredClone(this.lawyers.get(caseId) ?? []);
   }
 }
 
@@ -218,7 +227,7 @@ describe('IndexedDbCaseRepository smoke', () => {
       req.onsuccess = () => {
         const db = req.result;
         expect(Array.from(db.objectStoreNames)).toEqual(
-          expect.arrayContaining(['cases', 'evidence', 'messages', 'claims', 'legalNotes'])
+          expect.arrayContaining(['cases', 'evidence', 'messages', 'claims', 'legalNotes', 'lawyers'])
         );
         db.close();
         resolve();

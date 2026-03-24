@@ -79,6 +79,7 @@ export interface Case {
   messages: Message[];
   claims: Claim[];
   legalNotes: LegalNote[];
+  lawyers: Lawyer[];
 }
 
 export interface Gap {
