@@ -5,7 +5,7 @@ Discussion doc expanding on a review of the TDD implementation roadmap. Use the 
 **Related artifacts**
 
 - [MVP design spec](../specs/landlord_case_organizer_mvp_design_spec.md)
-- TDD plan (Cursor): `C:\Users\Folma\.cursor\plans\landlord_mvp_tdd_c6ad0408.plan.md` — if the plan is copied into this repo, update the link here to a relative path.
+- TDD plan (in repo): [landlord_mvp_tdd_c6ad0408.plan.md](../plans/landlord_mvp_tdd_c6ad0408.plan.md) — follow-up themes are merged into this plan.
 
 ---
 
