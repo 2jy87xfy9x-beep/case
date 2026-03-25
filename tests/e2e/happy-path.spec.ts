@@ -25,7 +25,8 @@ const FIXTURES_DIR = path.resolve(__dirname, '../fixtures');
 
 test.beforeEach(async ({ page }) => {
   // Clear IndexedDB so each test starts from an empty case.
-  await page.goto('/');
+  // v1 UI is served at /v1/
+  await page.goto('/v1/');
   await page.evaluate(() => indexedDB.deleteDatabase('case-organizer'));
   await page.reload();
   // Wait for the app to initialise (status text clears once the case is ready).
