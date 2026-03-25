@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash \"/c/Users/Folma/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.5/skills/brainstorming/scripts/start-server.sh\" --project-dir /c/case)",
+      "Bash(start \"C:\\\\case\\\\docs\\\\demos\\\\case_organizer_mvp2_mockup.html\")",
+      "Bash(if not:*)",
+      "Bash(ls -la /c/case/*.*)",
+      "Bash(npm test:*)",
+      "Bash(npx playwright:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npm:*)",
+      "Bash(npm install:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(xargs grep:*)",
+      "Bash(node -e \":*)",
+      "Bash(mkdir -p /c/case/.worktrees/phase-13/web/v1)",
+      "Bash(cp /c/case/.worktrees/phase-13/web/index.html /c/case/.worktrees/phase-13/web/v1/index.html)",
+      "Bash(cp /c/case/.worktrees/phase-13/web/main.ts /c/case/.worktrees/phase-13/web/v1/main.ts)",
+      "Bash(cp /c/case/.worktrees/phase-13/web/styles.css /c/case/.worktrees/phase-13/web/v1/styles.css)",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://localhost:5174/v1/)",
+      "Bash(curl -s http://localhost:5174/v1/styles.css)",
+      "Bash(pkill -f \"vite --config web\")",
+      "Bash(curl -s http://localhost:5175/v1/)",
+      "Bash(curl -s http://localhost:5173/v1/)",
+      "Bash(pkill -f \"vite --config\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 19320 /F)",
+      "Bash(cmd /c \"taskkill /PID 19320 /F\")",
+      "Bash(curl -s --max-time 2 http://localhost:5173/v1/)",
+      "Bash(findstr \":5173\")",
+      "Bash(kill -9 19320)",
+      "Bash(wmic process:*)",
+      "Bash(git merge feature/phase-15-e2e --no-ff -m \"feat\\(phase-15\\): Playwright E2E tests for v2 UI screens:*)",
+      "Bash(git worktree:*)",
+      "Bash(git branch:*)"
+    ]
+  }
+}

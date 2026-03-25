@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Organizer — Mockup</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    user-select: none;
+  }
+
+  /* ── Screens ── */
+  .screen { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .screen.active { display: flex; }
+
+  /* ── Top bar ── */
+  .topbar {
+    padding: 12px 20px 10px;
+    border-bottom: 1px solid #ddd;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topbar__title {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #888;
+    font-weight: 400;
+  }
+  .topbar__sync {
+    font-size: 11px;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .sync-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #34c759;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Canvas (main area) ── */
+  .canvas {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    background: #f5f5f5;
+  }
+
+  /* ── Case rows ── */
+  .case-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .case-row {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.1s;
+  }
+  .case-row:hover { background: #fafafa; border-color: #ccc; }
+
+  .case-row__icon { font-size: 14px; width: 20px; flex-shrink: 0; color: #555; }
+  .case-row__body { flex: 1; min-width: 0; }
+  .case-row__name { font-size: 13px; color: #111; font-weight: 500; }
+  .case-row__meta { font-size: 11px; color: #999; margin-top: 2px; }
+
+  .case-row__status {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border: 1px solid currentColor;
+    flex-shrink: 0;
+  }
+  .status--ready { color: #1a7a3a; }
+  .status--gaps  { color: #b85c00; }
+  .status--lib   { color: #888; }
+
+  .case-row__arrow { color: #bbb; font-size: 12px; flex-shrink: 0; }
+
+  /* ── Drop zone ── */
+  .drop-zone {
+    margin-top: 12px;
+    border: 1px dashed #ccc;
+    padding: 18px;
+    text-align: center;
+    color: #bbb;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    background: #fafafa;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .drop-zone:hover { border-color: #999; color: #888; }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 6px;
+    margin-top: 16px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* ── Bottom dock ── */
+  .dock {
+    border-top: 1px solid #ddd;
+    background: #fff;
+    display: flex;
+    justify-content: space-around;
+    padding: 8px 0 12px;
+  }
+  .dock__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 12px;
+    color: #999;
+    transition: color 0.1s;
+  }
+  .dock__item.active { color: #111; }
+  .dock__item:hover { color: #444; }
+  .dock__item__icon { font-size: 16px; line-height: 1; }
+  .dock__item__label { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ── Case detail ── */
+  .detail-topbar {
+    padding: 11px 16px;
+    border-bottom: 1px solid #ddd;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .back-btn {
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .back-btn:hover { color: #111; }
+  .detail-title { font-size: 13px; font-weight: 500; color: #111; flex: 1; }
+  .detail-status { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border: 1px solid #1a7a3a; color: #1a7a3a; }
+
+  .detail-canvas { flex: 1; overflow-y: auto; padding: 14px 16px; }
+
+  .evidence-group { margin-bottom: 16px; }
+  .evidence-group__label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #aaa;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+  }
+  .evidence-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #f2f2f2;
+    cursor: pointer;
+  }
+  .evidence-row:last-child { border-bottom: none; }
+  .evidence-row:hover { background: #fafafa; margin: 0 -4px; padding: 7px 4px; }
+  .evidence-row__icon { font-size: 14px; width: 18px; text-align: center; color: #555; }
+  .evidence-row__name { flex: 1; font-size: 12px; color: #222; }
+  .evidence-row__date { font-size: 11px; color: #bbb; }
+  .evidence-row__tag {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #888;
+    background: #f0f0f0;
+    padding: 1px 5px;
+  }
+
+  .unknown-tag {
+    color: #b85c00;
+    background: #fff4ec;
+  }
+
+  .export-bar {
+    padding: 10px 16px;
+    border-top: 1px solid #ddd;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .export-bar__meta { font-size: 11px; color: #aaa; }
+  .export-btn {
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: #111;
+    color: #fff;
+    border: none;
+    padding: 7px 16px;
+    cursor: pointer;
+  }
+  .export-btn:hover { background: #333; }
+
+  /* ── Tooltip banner ── */
+  .banner {
+    background: #fafafa;
+    border-bottom: 1px solid #eee;
+    padding: 8px 16px;
+    font-size: 11px;
+    color: #888;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── General legal screen ── */
+  .lib-note {
+    background: #fff8f0;
+    border: 1px solid #f0dfc8;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: #7a5c30;
+    line-height: 1.5;
+  }
+
+  /* ── Brief layout (case detail redesign) ── */
+  .brief-section {
+    margin-bottom: 18px;
+  }
+  .brief-section__header {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #aaa;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brief-section__header a {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: #aaa;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .brief-section__header a:hover { color: #555; }
+  .brief-summary {
+    font-size: 12px;
+    color: #333;
+    line-height: 1.65;
+    background: #fafafa;
+    border-left: 2px solid #ddd;
+    padding: 8px 12px;
+  }
+  .timeline-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 5px 0;
+    border-bottom: 1px solid #f4f4f4;
+  }
+  .timeline-row:last-child { border-bottom: none; }
+  .timeline-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #bbb;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .timeline-dot--key { background: #111; }
+  .timeline-date {
+    font-size: 10px;
+    color: #aaa;
+    width: 64px;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+  .timeline-event {
+    font-size: 12px;
+    color: #222;
+    flex: 1;
+    line-height: 1.4;
+  }
+  .timeline-tag {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #888;
+    background: #f0f0f0;
+    padding: 1px 5px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .fact-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+    color: #222;
+    line-height: 1.4;
+  }
+  .fact-row__arrow { color: #888; flex-shrink: 0; }
+  .gap-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    background: #fff8f0;
+    border: 1px solid #f0dfc8;
+    font-size: 12px;
+    color: #7a4a00;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .gap-row:hover { background: #fff2e4; }
+  .gap-row__icon { font-size: 13px; flex-shrink: 0; }
+  .gap-row__body { flex: 1; }
+  .gap-row__action { font-size: 10px; color: #b85c00; letter-spacing: 0.05em; }
+  .sources-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #f7f7f7;
+    border: 1px solid #e8e8e8;
+    cursor: pointer;
+    font-size: 12px;
+    color: #555;
+  }
+  .sources-collapsed:hover { background: #f0f0f0; }
+  .sources-collapsed__meta { font-size: 11px; color: #aaa; }
+  .sources-expanded { display: none; }
+  .sources-expanded.open { display: block; }
+
+  /* ── Intake options panel ── */
+  .intake-panel { display: none; }
+  .intake-panel.open { display: block; }
+  .intake-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .intake-option {
+    border: 1px solid #ddd;
+    padding: 10px 12px;
+    cursor: pointer;
+    background: #fff;
+    font-size: 11px;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .intake-option:hover { border-color: #999; background: #fafafa; }
+  .intake-option__icon { font-size: 15px; }
+  .intake-option__label { font-weight: 500; font-size: 11px; }
+  .intake-option__desc { font-size: 10px; color: #999; letter-spacing: 0.02em; }
+  .intake-toggle {
+    margin-top: 10px;
+    border: 1px dashed #ccc;
+    padding: 12px;
+    text-align: center;
+    color: #bbb;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    background: #fafafa;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .intake-toggle:hover { border-color: #999; color: #888; }
+
+  /* ── Export bar extended ── */
+  .export-bar__actions { display: flex; gap: 8px; align-items: center; }
+  .share-btn {
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: #fff;
+    color: #111;
+    border: 1px solid #ccc;
+    padding: 7px 14px;
+    cursor: pointer;
+  }
+  .share-btn:hover { border-color: #888; }
+
+  /* ══════════════════════════════════════
+     CONSULTATION MODE
+  ══════════════════════════════════════ */
+  .consult-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #f8f8f6;
+    z-index: 1000;
+    flex-direction: column;
+    font-family: 'SF Mono','Menlo','Courier New',monospace;
+    font-size: 13px;
+  }
+  .consult-overlay.active { display: flex; }
+
+  .consult-topbar {
+    padding: 11px 18px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .consult-exit {
+    font-family: inherit; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #999; background: none;
+    border: none; cursor: pointer; padding: 0; flex-shrink: 0;
+  }
+  .consult-exit:hover { color: #111; }
+  .consult-progress-track {
+    flex: 1; height: 2px; background: #eee; position: relative; overflow: hidden;
+  }
+  .consult-progress-fill {
+    height: 100%; background: #111; transition: width 0.35s ease; width: 16.6%;
+  }
+  .consult-slide-indicator {
+    font-size: 10px; color: #bbb; letter-spacing: 0.1em; flex-shrink: 0;
+  }
+  .consult-case-label {
+    font-size: 10px; color: #888; letter-spacing: 0.06em;
+    border-left: 1px solid #ddd; padding-left: 14px; flex-shrink: 0;
+  }
+
+  .consult-body { flex: 1; overflow-y: auto; }
+
+  .consult-slide {
+    display: none; min-height: 100%;
+    padding: 26px 22px 16px; flex-direction: column;
+    animation: cSlideIn 0.22s ease;
+  }
+  .consult-slide.active { display: flex; }
+  @keyframes cSlideIn { from { opacity:0; transform:translateX(10px); } to { opacity:1; transform:translateX(0); } }
+
+  .cs-label {
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #bbb; margin-bottom: 12px;
+  }
+  .cs-heading {
+    font-size: 16px; font-weight: 600; color: #111;
+    line-height: 1.35; margin-bottom: 20px; letter-spacing: -0.01em;
+  }
+  .cs-body { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+
+  /* Orientation grid */
+  .orient-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .orient-card {
+    background: #fff; border: 1px solid #e8e8e8; padding: 11px 13px;
+  }
+  .orient-card--wide { grid-column: 1/-1; }
+  .orient-card__label {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #bbb; margin-bottom: 5px;
+  }
+  .orient-card__value { font-size: 12px; color: #111; line-height: 1.45; }
+  .orient-card--goal .orient-card__value { font-style: italic; color: #1a4a1a; font-size: 13px; }
+  .strength-bar { display: flex; gap: 4px; margin-top: 5px; }
+  .sp { width: 22px; height: 4px; background: #e0e0e0; }
+  .sp.on { background: #111; }
+
+  /* Legal flag */
+  .legal-flag {
+    background: #f0f4ff; border: 1px solid #d0d8f0;
+    border-left: 3px solid #4466cc; padding: 10px 13px;
+    font-size: 11px; color: #2a3a70; line-height: 1.6;
+  }
+  .legal-flag__statute {
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #4466cc; margin-bottom: 5px;
+  }
+
+  /* Document preview */
+  .evblock { margin-bottom: 4px; }
+  .evblock__label {
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #aaa; margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+  }
+  .evblock__label em {
+    font-style: normal; background: #f0f0f0; padding: 1px 6px;
+    color: #666; font-size: 9px; border-radius: 0;
+  }
+  .doc-preview {
+    background: #fff; border: 1px solid #ddd; font-size: 11px;
+    color: #444; line-height: 1.65; overflow: hidden;
+  }
+  .doc-preview__hdr {
+    background: #f5f5f5; border-bottom: 1px solid #e8e8e8;
+    padding: 5px 10px; font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #888;
+    display: flex; justify-content: space-between;
+  }
+  .doc-preview__body { padding: 10px 12px; font-size: 11px; color: #444; line-height: 1.7; }
+  .hl { background: #fff3b0; padding: 0 2px; color: #111; }
+  .hl--red { background: #ffe0e0; color: #800; }
+  .doc-note {
+    font-size: 10px; color: #b85c00; padding: 6px 12px 8px;
+    background: #fff8f0; border-top: 1px solid #f0dfc8;
+    display: flex; align-items: flex-start; gap: 5px;
+  }
+
+  /* Message preview */
+  .msg-preview { background: #fff; border: 1px solid #ddd; overflow: hidden; }
+  .msg-preview__hdr {
+    background: #f5f5f5; border-bottom: 1px solid #e8e8e8;
+    padding: 5px 10px; font-size: 9px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #888;
+  }
+  .msg-bubble { padding: 9px 12px; font-size: 11px; line-height: 1.6; color: #333; }
+  .msg-bubble__sender { font-size: 9px; color: #aaa; margin-bottom: 3px; letter-spacing: 0.06em; }
+  .msg-silence {
+    padding: 6px 12px 8px; font-size: 10px; color: #b85c00;
+    background: #fff8f0; border-top: 1px solid #f0dfc8;
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  /* Consultation timeline */
+  .ct-row {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 8px 0; border-bottom: 1px solid #f0f0f0;
+  }
+  .ct-row:last-child { border-bottom: none; }
+  .ct-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #ccc;
+    flex-shrink: 0; margin-top: 3px;
+  }
+  .ct-dot--key { background: #111; }
+  .ct-date { font-size: 10px; color: #aaa; width: 62px; flex-shrink: 0; padding-top: 1px; }
+  .ct-body { flex: 1; }
+  .ct-event { font-size: 12px; color: #111; line-height: 1.4; }
+  .ct-badge {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;
+    background: #f5f5f5; border: 1px solid #e0e0e0; padding: 2px 8px;
+    font-size: 10px; color: #555; cursor: pointer;
+  }
+  .ct-badge:hover { background: #ebebeb; }
+  .ct-warn { margin-top: 4px; font-size: 10px; color: #b85c00; display: flex; align-items: center; gap: 4px; }
+
+  /* Consultation gaps */
+  .consult-gap {
+    background: #fff; border: 1px solid #e8e8e8;
+    border-left: 3px solid #b85c00; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .consult-gap__title { font-size: 12px; color: #111; font-weight: 500; margin-bottom: 6px; }
+  .consult-gap__q {
+    font-size: 11px; color: #555; line-height: 1.6; font-style: italic;
+    border-top: 1px solid #f0f0f0; padding-top: 7px; margin-top: 4px;
+  }
+
+  /* Library surface */
+  .lib-surface {
+    background: #fff8f0; border: 1px solid #f0dfc8; padding: 10px 13px;
+    margin-bottom: 7px; display: flex; align-items: center; gap: 10px; cursor: pointer;
+  }
+  .lib-surface:hover { background: #fff2e4; }
+  .lib-surface__icon { font-size: 14px; color: #b85c00; flex-shrink: 0; }
+  .lib-surface__body { flex: 1; }
+  .lib-surface__name { font-size: 12px; color: #111; }
+  .lib-surface__reason { font-size: 10px; color: #b85c00; margin-top: 2px; }
+  .lib-surface__cta { font-size: 10px; color: #aaa; flex-shrink: 0; }
+
+  /* Final slide actions */
+  .ready-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; border-bottom: 1px solid #f0f0f0;
+    font-size: 12px;
+  }
+  .ready-row:last-child { border-bottom: none; }
+  .ready-row__icon { font-size: 13px; width: 18px; text-align: center; flex-shrink: 0; }
+  .ready-row__text { flex: 1; color: #333; }
+  .ready-row--warn .ready-row__text { color: #b85c00; }
+  .consult-action-btns { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .ca-btn {
+    font-family: inherit; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 8px 16px; cursor: pointer; border: 1px solid #ccc;
+    background: #fff; color: #111;
+  }
+  .ca-btn:hover { border-color: #888; }
+  .ca-btn--primary { background: #111; color: #fff; border-color: #111; }
+  .ca-btn--primary:hover { background: #333; }
+
+  /* Consult navigation */
+  .consult-nav {
+    border-top: 1px solid #e0e0e0; background: #fff;
+    padding: 10px 20px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .consult-nav__dots { display: flex; gap: 6px; align-items: center; }
+  .nav-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: #ddd;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .nav-dot.active { background: #111; }
+  .c-btn {
+    font-family: inherit; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; background: none; border: 1px solid #ddd;
+    color: #555; padding: 6px 14px; cursor: pointer; transition: all 0.1s;
+  }
+  .c-btn:hover:not(:disabled) { border-color: #888; color: #111; }
+  .c-btn:disabled { opacity: 0.25; cursor: default; }
+  .c-btn--finish { background: #111; color: #fff; border-color: #111; }
+  .c-btn--finish:hover { background: #333; }
+  .consult-btn {
+    font-family: inherit; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; background: #fff; color: #111;
+    border: 1px solid #111; padding: 7px 14px; cursor: pointer; transition: all 0.12s;
+  }
+  .consult-btn:hover { background: #111; color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     SCREEN 1 — HOME / CANVAS
+════════════════════════════════════════════ -->
+<div class="screen active" id="screen-home">
+
+  <div class="topbar">
+    <span class="topbar__title">Cases</span>
+    <span class="topbar__sync">
+      <span class="sync-dot"></span>
+      synced 1 min ago
+    </span>
+  </div>
+
+  <div class="canvas">
+
+    <div class="section-label">Active</div>
+    <div class="case-list">
+
+      <div class="case-row" onclick="openCase('main')">
+        <span class="case-row__icon">▸</span>
+        <div class="case-row__body">
+          <div class="case-row__name">123 Main St — Apt 4B</div>
+          <div class="case-row__meta">14 items · lease, photos, messages, notices</div>
+        </div>
+        <span class="case-row__status status--ready">ready</span>
+        <span class="case-row__arrow">›</span>
+      </div>
+
+      <div class="case-row" onclick="openCase('oak')">
+        <span class="case-row__icon">▸</span>
+        <div class="case-row__body">
+          <div class="case-row__name">Oak Ave Dispute</div>
+          <div class="case-row__meta">3 items · 2 gaps detected</div>
+        </div>
+        <span class="case-row__status status--gaps">2 gaps</span>
+        <span class="case-row__arrow">›</span>
+      </div>
+
+    </div>
+
+    <div class="section-label">Library</div>
+    <div class="case-list">
+      <div class="case-row" onclick="openCase('lib')">
+        <span class="case-row__icon">─</span>
+        <div class="case-row__body">
+          <div class="case-row__name">General Legal Docs</div>
+          <div class="case-row__meta">8 items · not yet assigned to a case</div>
+        </div>
+        <span class="case-row__status status--lib">library</span>
+        <span class="case-row__arrow">›</span>
+      </div>
+    </div>
+
+    <div class="intake-toggle" onclick="toggleIntake()">+ add files &nbsp;·&nbsp; tap to see all options</div>
+    <div class="intake-panel" id="intake-panel">
+      <div class="intake-grid">
+        <div class="intake-option" onclick="alert('Connect Google Drive or Dropbox folder — app polls on open')">
+          <span class="intake-option__icon">⟳</span>
+          <span class="intake-option__label">Sync Folder</span>
+          <span class="intake-option__desc">Google Drive · Dropbox<br>auto-processes on open</span>
+        </div>
+        <div class="intake-option" onclick="alert('Drop a folder of mixed files — app classifies and builds the case')">
+          <span class="intake-option__icon">⬓</span>
+          <span class="intake-option__label">Drop Folder</span>
+          <span class="intake-option__desc">Mixed media · any type<br>one-time import</span>
+        </div>
+        <div class="intake-option" onclick="alert('Select individual files to add to an existing or new case')">
+          <span class="intake-option__icon">⎘</span>
+          <span class="intake-option__label">Upload Files</span>
+          <span class="intake-option__desc">PDFs · images · docs<br>single or batch</span>
+        </div>
+        <div class="intake-option" onclick="alert('Import iMessage / SMS export — CSV or XML format')">
+          <span class="intake-option__icon">≡</span>
+          <span class="intake-option__label">Import Messages</span>
+          <span class="intake-option__desc">iMessage · SMS<br>CSV · XML export</span>
+        </div>
+        <div class="intake-option" onclick="alert('Add details manually — names, dates, events, notes')">
+          <span class="intake-option__icon">✎</span>
+          <span class="intake-option__label">Manual Entry</span>
+          <span class="intake-option__desc">Events · contacts<br>notes · key dates</span>
+        </div>
+        <div class="intake-option" onclick="alert('Batch import photos from camera roll or folder')">
+          <span class="intake-option__icon">◫</span>
+          <span class="intake-option__label">Photo Batch</span>
+          <span class="intake-option__desc">Camera roll · folder<br>auto date-sorted</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="dock">
+    <div class="dock__item active">
+      <div class="dock__item__icon">⊞</div>
+      <div class="dock__item__label">Cases</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">⏱</div>
+      <div class="dock__item__label">Timeline</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">△</div>
+      <div class="dock__item__label">Gaps</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">↗</div>
+      <div class="dock__item__label">Export</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">◎</div>
+      <div class="dock__item__label">Settings</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 2 — CASE DETAIL (123 Main St)
+════════════════════════════════════════════ -->
+<div class="screen" id="screen-case-main">
+
+  <div class="detail-topbar">
+    <button class="back-btn" onclick="goHome()">‹ Cases</button>
+    <span class="detail-title">123 Main St — Apt 4B</span>
+    <span class="detail-status">ready</span>
+  </div>
+
+  <div class="banner">
+    ✦ &nbsp;Auto-organized from sync folder · last processed 1 min ago
+  </div>
+
+  <div class="detail-canvas">
+
+    <!-- SUMMARY -->
+    <div class="brief-section">
+      <div class="brief-section__header">
+        <span>Case Summary</span>
+        <span style="font-size:9px;color:#bbb;letter-spacing:0.06em">AUTO-GENERATED</span>
+      </div>
+      <div class="brief-summary">
+        Tenant at 123 Main St, Apt 4B disputes a $400 rent increase issued Feb 2024 while an unresolved ceiling water damage repair request from Nov 2023 remained open. Tenancy began Mar 2023 under a 12-month lease. Landlord communication is documented across 47 messages.
+      </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div class="brief-section">
+      <div class="brief-section__header">
+        <span>Timeline</span>
+        <a onclick="alert('Full timeline view — all 14 dated events')">view all ›</a>
+      </div>
+
+      <div class="timeline-row">
+        <div class="timeline-dot timeline-dot--key"></div>
+        <div class="timeline-date">Mar 2023</div>
+        <div class="timeline-event">Lease signed — $2,100/mo, 12-month term</div>
+        <div class="timeline-tag">lease</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-dot timeline-dot--key"></div>
+        <div class="timeline-date">Nov 2023</div>
+        <div class="timeline-event">Repair request submitted — ceiling water damage</div>
+        <div class="timeline-tag">repair</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-dot"></div>
+        <div class="timeline-date">Jan 2024</div>
+        <div class="timeline-event">Ceiling damage photographed (3 images)</div>
+        <div class="timeline-tag">photo</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-dot"></div>
+        <div class="timeline-date">Jan 2024</div>
+        <div class="timeline-event">Lease amendment signed</div>
+        <div class="timeline-tag">lease</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-dot timeline-dot--key"></div>
+        <div class="timeline-date">Feb 2024</div>
+        <div class="timeline-event">Rent increase notice received — +$400/mo</div>
+        <div class="timeline-tag">notice</div>
+      </div>
+      <div class="timeline-row">
+        <div class="timeline-dot timeline-dot--key"></div>
+        <div class="timeline-date">Mar 2024</div>
+        <div class="timeline-event">Correspondence received — nature unclear</div>
+        <div class="timeline-tag unknown-tag" style="font-size:9px;letter-spacing:0.08em;text-transform:uppercase;padding:1px 5px;cursor:pointer" onclick="alert('Assign to: Lease / Payment / Notice / Photos / Library')">review</div>
+      </div>
+    </div>
+
+    <!-- KEY FACTS -->
+    <div class="brief-section">
+      <div class="brief-section__header"><span>Key Facts</span></div>
+      <div class="fact-row"><span class="fact-row__arrow">→</span><span>Rent increase issued while repair request was unresolved (3-month gap)</span></div>
+      <div class="fact-row"><span class="fact-row__arrow">→</span><span>47 landlord messages on record — dates span Nov 2023–Mar 2024</span></div>
+      <div class="fact-row"><span class="fact-row__arrow">→</span><span>Damage documented in photos with EXIF timestamps</span></div>
+      <div class="fact-row"><span class="fact-row__arrow">→</span><span>No written repair acknowledgment found in uploaded files</span></div>
+    </div>
+
+    <!-- GAPS — CONSULTATION AGENDA -->
+    <div class="brief-section">
+      <div class="brief-section__header">
+        <span>Gaps &nbsp;<span style="color:#b85c00">— consultation agenda</span></span>
+        <span style="color:#b85c00;font-size:9px">2 items</span>
+      </div>
+      <div class="gap-row" onclick="alert('Suggested action: Ask client if landlord ever replied in writing to the repair request')">
+        <span class="gap-row__icon">⚠</span>
+        <div class="gap-row__body">
+          <div>Landlord written response to repair request</div>
+          <div class="gap-row__action">not found · ask client →</div>
+        </div>
+      </div>
+      <div class="gap-row" onclick="alert('Suggested action: Upload bank statements or rent payment receipts')">
+        <span class="gap-row__icon">⚠</span>
+        <div class="gap-row__body">
+          <div>Payment history / rent ledger</div>
+          <div class="gap-row__action">not uploaded · add now →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOURCE FILES (secondary / collapsed) -->
+    <div class="brief-section">
+      <div class="brief-section__header"><span>Source Files</span></div>
+      <div class="sources-collapsed" onclick="toggleSources()">
+        <span>⊟ &nbsp;14 items packaged</span>
+        <span class="sources-collapsed__meta">lease (2) · notices (1) · photos (4) · messages (1) · unreviewed (1) &nbsp;›</span>
+      </div>
+      <div class="sources-expanded" id="sources-expanded">
+        <div class="evidence-row" style="padding-left:10px">
+          <span class="evidence-row__icon">⎘</span>
+          <span class="evidence-row__name">lease_2023_signed.pdf</span>
+          <span class="evidence-row__date">Mar 2023</span>
+          <span class="evidence-row__tag">lease</span>
+        </div>
+        <div class="evidence-row" style="padding-left:10px">
+          <span class="evidence-row__icon">⎘</span>
+          <span class="evidence-row__name">amendment_jan2024.pdf</span>
+          <span class="evidence-row__date">Jan 2024</span>
+          <span class="evidence-row__tag">lease</span>
+        </div>
+        <div class="evidence-row" style="padding-left:10px">
+          <span class="evidence-row__icon">⎘</span>
+          <span class="evidence-row__name">rent_increase_notice_feb.pdf</span>
+          <span class="evidence-row__date">Feb 2024</span>
+          <span class="evidence-row__tag">notice</span>
+        </div>
+        <div class="evidence-row" style="padding-left:10px">
+          <span class="evidence-row__icon">◫</span>
+          <span class="evidence-row__name">ceiling_damage — 3 photos</span>
+          <span class="evidence-row__date">Nov–Jan</span>
+          <span class="evidence-row__tag">photo</span>
+        </div>
+        <div class="evidence-row" style="padding-left:10px">
+          <span class="evidence-row__icon">≡</span>
+          <span class="evidence-row__name">iMessage export — landlord thread</span>
+          <span class="evidence-row__date">47 msgs</span>
+          <span class="evidence-row__tag">messages</span>
+        </div>
+        <div class="evidence-row" style="padding-left:10px;cursor:pointer" onclick="alert('Assign to: Lease / Payment / Notice / Photos / Library')">
+          <span class="evidence-row__icon">?</span>
+          <span class="evidence-row__name">correspondence_march.docx</span>
+          <span class="evidence-row__date">Mar 2024</span>
+          <span class="evidence-row__tag unknown-tag">review</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="export-bar">
+    <span class="export-bar__meta">14 items · 2 gaps</span>
+    <div class="export-bar__actions">
+      <button class="consult-btn" onclick="enterConsultMode()">▶ Consult</button>
+      <button class="share-btn" onclick="alert('Share options:\n\n① Live access — send lawyer a read-only link to this case\n② Export package — PDF brief + source files bundled')">Share ⇢</button>
+      <button class="export-btn">Export ↗</button>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="dock__item" onclick="goHome()">
+      <div class="dock__item__icon">⊞</div>
+      <div class="dock__item__label">Cases</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">⏱</div>
+      <div class="dock__item__label">Timeline</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">△</div>
+      <div class="dock__item__label">Gaps</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">↗</div>
+      <div class="dock__item__label">Export</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">◎</div>
+      <div class="dock__item__label">Settings</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     SCREEN 3 — GENERAL LEGAL LIBRARY
+════════════════════════════════════════════ -->
+<div class="screen" id="screen-case-lib">
+
+  <div class="detail-topbar">
+    <button class="back-btn" onclick="goHome()">‹ Cases</button>
+    <span class="detail-title">General Legal Docs</span>
+    <span class="case-row__status status--lib" style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border:1px solid #aaa;color:#888;">library</span>
+  </div>
+
+  <div class="banner">
+    ✦ &nbsp;Not yet assigned to a case — app organized these by type
+  </div>
+
+  <div class="detail-canvas">
+
+    <div class="lib-note">
+      These documents don't match an active case yet. They're organized and ready — assign any item to a case when relevant.
+    </div>
+
+    <div class="evidence-group">
+      <div class="evidence-group__label">Tenant Rights</div>
+      <div class="evidence-row" onclick="alert('Assign to case: 123 Main St / Oak Ave / Keep in Library')">
+        <span class="evidence-row__icon">⎘</span>
+        <span class="evidence-row__name">tenant_rights_summary_CA.pdf</span>
+        <span class="evidence-row__date">—</span>
+        <span class="evidence-row__tag">assign →</span>
+      </div>
+      <div class="evidence-row" onclick="alert('Assign to case: 123 Main St / Oak Ave / Keep in Library')">
+        <span class="evidence-row__icon">⎘</span>
+        <span class="evidence-row__name">rent_control_ordinance_2023.pdf</span>
+        <span class="evidence-row__date">—</span>
+        <span class="evidence-row__tag">assign →</span>
+      </div>
+    </div>
+
+    <div class="evidence-group">
+      <div class="evidence-group__label">Templates</div>
+      <div class="evidence-row" onclick="alert('Assign to case: 123 Main St / Oak Ave / Keep in Library')">
+        <span class="evidence-row__icon">⎘</span>
+        <span class="evidence-row__name">demand_letter_template.docx</span>
+        <span class="evidence-row__date">—</span>
+        <span class="evidence-row__tag">assign →</span>
+      </div>
+    </div>
+
+    <div class="evidence-group">
+      <div class="evidence-group__label">Correspondence</div>
+      <div class="evidence-row" onclick="alert('Assign to case: 123 Main St / Oak Ave / Keep in Library')">
+        <span class="evidence-row__icon">⎘</span>
+        <span class="evidence-row__name">email_housing_authority.pdf</span>
+        <span class="evidence-row__date">Feb 2024</span>
+        <span class="evidence-row__tag">assign →</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="dock">
+    <div class="dock__item" onclick="goHome()">
+      <div class="dock__item__icon">⊞</div>
+      <div class="dock__item__label">Cases</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">⏱</div>
+      <div class="dock__item__label">Timeline</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">△</div>
+      <div class="dock__item__label">Gaps</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">↗</div>
+      <div class="dock__item__label">Export</div>
+    </div>
+    <div class="dock__item">
+      <div class="dock__item__icon">◎</div>
+      <div class="dock__item__label">Settings</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════
+     CONSULTATION MODE OVERLAY
+════════════════════════════════════════════ -->
+<div class="consult-overlay" id="consult-overlay">
+
+  <div class="consult-topbar">
+    <button class="consult-exit" onclick="exitConsultMode()">✕ exit</button>
+    <div class="consult-progress-track">
+      <div class="consult-progress-fill" id="c-progress"></div>
+    </div>
+    <span class="consult-slide-indicator" id="c-indicator">1 / 6</span>
+    <span class="consult-case-label">123 Main St — Apt 4B</span>
+  </div>
+
+  <div class="consult-body" id="consult-body">
+
+    <!-- ── SLIDE 1: ORIENTATION ── -->
+    <div class="consult-slide active" id="cs-1">
+      <div class="cs-label">Slide 1 — Orientation</div>
+      <div class="cs-heading">Here is what you are looking at.</div>
+      <div class="cs-body">
+        <div class="orient-grid">
+          <div class="orient-card">
+            <div class="orient-card__label">Case Type</div>
+            <div class="orient-card__value">Landlord-Tenant<br>Rent Dispute</div>
+          </div>
+          <div class="orient-card">
+            <div class="orient-card__label">Jurisdiction</div>
+            <div class="orient-card__value">California<br>Rent Control District</div>
+          </div>
+          <div class="orient-card orient-card--wide orient-card--goal">
+            <div class="orient-card__label">What the client wants</div>
+            <div class="orient-card__value">"I want the rent increase reversed and the ceiling repaired — it has been ignored for months."</div>
+          </div>
+          <div class="orient-card">
+            <div class="orient-card__label">Tenancy</div>
+            <div class="orient-card__value">Mar 2023 — present<br>13 months</div>
+          </div>
+          <div class="orient-card">
+            <div class="orient-card__label">Evidence Strength</div>
+            <div class="orient-card__value">
+              Strong — 14 items
+              <div class="strength-bar">
+                <div class="sp on"></div><div class="sp on"></div><div class="sp on"></div><div class="sp"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="orient-grid">
+          <div class="orient-card">
+            <div class="orient-card__label">Tenant</div>
+            <div class="orient-card__value">Jane Doe<br>Apt 4B · 123 Main St</div>
+          </div>
+          <div class="orient-card">
+            <div class="orient-card__label">Landlord</div>
+            <div class="orient-card__value">John Smith<br>JS Property Mgmt</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SLIDE 2: THE DISPUTE ── -->
+    <div class="consult-slide" id="cs-2">
+      <div class="cs-label">Slide 2 — The Dispute</div>
+      <div class="cs-heading">A rent increase was issued while a repair request sat unanswered for 87 days.</div>
+      <div class="cs-body">
+        <div class="orient-card">
+          <div class="orient-card__label">Plain language summary</div>
+          <div class="orient-card__value" style="line-height:1.7;font-size:12px">
+            Tenant submitted a repair request for ceiling water damage on <strong>Nov 12, 2023</strong>. No written response was ever received. On <strong>Feb 14, 2024</strong> — 87 days later and while the repair remained unresolved — the landlord issued a notice increasing rent by <strong>$400/month</strong>.
+          </div>
+        </div>
+        <div class="legal-flag">
+          <div class="legal-flag__statute">⚑ &nbsp;Potential Claims Identified</div>
+          <strong>Retaliatory Rent Increase</strong> — CA Civil Code §1942.5<br>
+          A rent increase issued after a tenant exercises habitability rights (repair request) may constitute retaliation. Burden shifts to landlord to prove a non-retaliatory reason.<br><br>
+          <strong>Breach of Implied Warranty of Habitability</strong> — CA Civil Code §1941<br>
+          Landlord's failure to repair ceiling water damage within a reasonable time may constitute breach.
+        </div>
+        <div class="legal-flag" style="background:#f0fff4;border-color:#c0e8d0;border-left-color:#2a8a4a;color:#1a4a2a">
+          <div class="legal-flag__statute" style="color:#2a8a4a">⊕ &nbsp;Library Document Surfaced</div>
+          <strong>rent_control_ordinance_2023.pdf</strong> is in your Library and is directly relevant — it covers allowable rent increase limits in this jurisdiction. Added to this consultation.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SLIDE 3: THE PROOF ── -->
+    <div class="consult-slide" id="cs-3">
+      <div class="cs-label">Slide 3 — The Proof</div>
+      <div class="cs-heading">The documents make the case. Here they are, in context.</div>
+      <div class="cs-body">
+
+        <div class="evblock">
+          <div class="evblock__label">Claim: rent increase issued <em>rent_increase_notice_feb.pdf</em></div>
+          <div class="doc-preview">
+            <div class="doc-preview__hdr"><span>⎘ rent_increase_notice_feb.pdf</span><span>Feb 14, 2024</span></div>
+            <div class="doc-preview__body">
+              NOTICE OF RENT INCREASE<br><br>
+              Dear Tenant,<br>
+              This notice is to inform you that <span class="hl">effective March 1, 2024, your monthly rent will increase from $2,100 to $2,500</span> — an increase of <span class="hl">$400 per month</span>.<br><br>
+              Please confirm receipt in writing.<br><br>
+              JS Property Management &nbsp;·&nbsp; Feb 14, 2024
+            </div>
+          </div>
+        </div>
+
+        <div class="evblock">
+          <div class="evblock__label">Claim: repair request went unanswered <em>iMessage export · 47 msgs</em></div>
+          <div class="msg-preview">
+            <div class="msg-preview__hdr">iMessage — Tenant → Landlord · Nov 12, 2023 · 11:34 AM</div>
+            <div class="msg-bubble">
+              <div class="msg-bubble__sender">Jane Doe → John Smith</div>
+              <div>"Hi John, <span class="hl">there is water coming through the ceiling again</span>. This is the third time this month. <span class="hl">Can you please send someone to fix it?</span> It is getting worse."
+              </div>
+            </div>
+            <div class="msg-silence">⚠ &nbsp;<strong>No landlord reply found in thread</strong> — silence spans Nov 12, 2023 to Feb 14, 2024 · <strong>87 days</strong></div>
+          </div>
+        </div>
+
+        <div class="evblock">
+          <div class="evblock__label">Claim: damage documented with timestamps <em>ceiling_damage · 3 photos</em></div>
+          <div class="doc-preview">
+            <div class="doc-preview__hdr"><span>◫ Photo evidence — EXIF timestamps verified</span><span>Nov 2023 – Jan 2024</span></div>
+            <div class="doc-preview__body" style="display:flex;gap:10px;align-items:flex-start">
+              <div style="flex:1;background:#f0f0f0;height:56px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10px">img_001.jpg<br><span style="font-size:9px">Nov 13, 2023</span></div>
+              <div style="flex:1;background:#f0f0f0;height:56px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10px">img_002.jpg<br><span style="font-size:9px">Dec 4, 2023</span></div>
+              <div style="flex:1;background:#f0f0f0;height:56px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10px">img_003.jpg<br><span style="font-size:9px">Jan 8, 2024</span></div>
+            </div>
+            <div class="doc-note">⚑ &nbsp;Timestamps confirm damage persisted for <strong>56 days</strong> before rent increase was issued. Useful for establishing timeline of landlord knowledge.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── SLIDE 4: TIMELINE ── -->
+    <div class="consult-slide" id="cs-4">
+      <div class="cs-label">Slide 4 — Timeline</div>
+      <div class="cs-heading">Every event in order. Every claim has a source.</div>
+      <div class="cs-body">
+        <div style="background:#fff;border:1px solid #e8e8e8;padding:12px 14px;">
+
+          <div class="ct-row">
+            <div class="ct-dot ct-dot--key"></div>
+            <div class="ct-date">Mar 2023</div>
+            <div class="ct-body">
+              <div class="ct-event">Lease signed — $2,100/mo, 12-month term</div>
+              <div class="ct-badge">⎘ lease_2023_signed.pdf</div>
+            </div>
+          </div>
+
+          <div class="ct-row">
+            <div class="ct-dot ct-dot--key"></div>
+            <div class="ct-date">Nov 12, 2023</div>
+            <div class="ct-body">
+              <div class="ct-event">Repair request submitted — ceiling water damage</div>
+              <div class="ct-badge">≡ iMessage · 11:34 AM</div>
+            </div>
+          </div>
+
+          <div class="ct-row">
+            <div class="ct-dot"></div>
+            <div class="ct-date">Nov 13–<br>Jan 8</div>
+            <div class="ct-body">
+              <div class="ct-event">Damage documented across 3 photos</div>
+              <div class="ct-badge">◫ 3 photos · EXIF verified</div>
+              <div class="ct-warn">⚑ No landlord response during this period</div>
+            </div>
+          </div>
+
+          <div class="ct-row">
+            <div class="ct-dot"></div>
+            <div class="ct-date">Jan 15, 2024</div>
+            <div class="ct-body">
+              <div class="ct-event">Lease amendment signed</div>
+              <div class="ct-badge">⎘ amendment_jan2024.pdf</div>
+            </div>
+          </div>
+
+          <div class="ct-row">
+            <div class="ct-dot ct-dot--key"></div>
+            <div class="ct-date">Feb 14, 2024</div>
+            <div class="ct-body">
+              <div class="ct-event">Rent increase notice — +$400/mo, eff. Mar 1</div>
+              <div class="ct-badge">⎘ rent_increase_notice_feb.pdf</div>
+              <div class="ct-warn">⚑ 87 days after repair request · repair still unresolved</div>
+            </div>
+          </div>
+
+          <div class="ct-row">
+            <div class="ct-dot"></div>
+            <div class="ct-date">Mar 2024</div>
+            <div class="ct-body">
+              <div class="ct-event">Correspondence received — nature unconfirmed</div>
+              <div class="ct-badge" style="border-color:#f0dfc8;color:#b85c00;background:#fff8f0">? correspondence_march.docx · needs review</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SLIDE 5: GAPS ── -->
+    <div class="consult-slide" id="cs-5">
+      <div class="cs-label">Slide 5 — Gaps</div>
+      <div class="cs-heading">Two things are missing. These are your questions.</div>
+      <div class="cs-body">
+
+        <div class="consult-gap">
+          <div class="consult-gap__title">⚠ &nbsp;Landlord's written response to repair request</div>
+          <div style="font-size:11px;color:#888;line-height:1.5">Not found in any uploaded file — messages, PDFs, or documents.</div>
+          <div class="consult-gap__q">"Did the landlord ever reply to your repair request — by text, email, letter, or in person? If in person, do you have any notes or a witness?"</div>
+        </div>
+
+        <div class="consult-gap">
+          <div class="consult-gap__title">⚠ &nbsp;Payment history / rent ledger</div>
+          <div style="font-size:11px;color:#888;line-height:1.5">No payment records uploaded. Needed to establish rent amount history and consistency of payment.</div>
+          <div class="consult-gap__q">"Do you have bank statements showing rent payments, or receipts from your landlord? Even 3–6 months of statements would help establish the rent amount and that you paid on time."</div>
+        </div>
+
+        <div style="background:#fff;border:1px solid #e8e8e8;padding:11px 13px;font-size:11px;color:#555;line-height:1.6">
+          ✦ &nbsp;<strong>One item needs your review:</strong> <em>correspondence_march.docx</em> was found but its relevance is unclear. Recommend reviewing before filing — it may be a landlord response or an unrelated document.
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── SLIDE 6: READY ── -->
+    <div class="consult-slide" id="cs-6">
+      <div class="cs-label">Slide 6 — Ready</div>
+      <div class="cs-heading">This case is presentation-ready.</div>
+      <div class="cs-body">
+
+        <div style="background:#fff;border:1px solid #e8e8e8;padding:12px 14px;">
+          <div class="ready-row"><span class="ready-row__icon">✓</span><span class="ready-row__text">Legal framing identified — 2 potential claims</span></div>
+          <div class="ready-row"><span class="ready-row__icon">✓</span><span class="ready-row__text">14 items organized and packaged</span></div>
+          <div class="ready-row"><span class="ready-row__icon">✓</span><span class="ready-row__text">Timeline verified — all events source-linked</span></div>
+          <div class="ready-row"><span class="ready-row__icon">✓</span><span class="ready-row__text">Evidence shown in context — no digging required</span></div>
+          <div class="ready-row ready-row--warn"><span class="ready-row__icon">⚠</span><span class="ready-row__text">2 gaps remain — address before filing</span></div>
+          <div class="ready-row ready-row--warn"><span class="ready-row__icon">⚠</span><span class="ready-row__text">1 document pending review (correspondence_march.docx)</span></div>
+        </div>
+
+        <div style="background:#fff8f0;border:1px solid #f0dfc8;padding:11px 13px;font-size:11px;color:#7a4a00;line-height:1.6">
+          ⊕ &nbsp;<strong>From your Library:</strong> rent_control_ordinance_2023.pdf is relevant to the allowable increase amount in this jurisdiction. Assign it to this case to include it in the export.
+        </div>
+
+        <div class="consult-action-btns">
+          <button class="ca-btn ca-btn--primary" onclick="alert('Generating export package:\n\n• Case brief (PDF)\n• Source files (organized)\n• Timeline summary\n• Relevant library docs')">Export Full Package ↗</button>
+          <button class="ca-btn" onclick="alert('Generating shareable link...\n\nLawyer will see:\n• Read-only consultation view\n• All slides + evidence\n• No editing access')">Share Live Access ⇢</button>
+          <button class="ca-btn" onclick="exitConsultMode()">Back to Brief</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- end consult-body -->
+
+  <div class="consult-nav">
+    <button class="c-btn" id="c-prev" onclick="consultNav(-1)" disabled>‹ Prev</button>
+    <div class="consult-nav__dots" id="c-dots"></div>
+    <button class="c-btn" id="c-next" onclick="consultNav(1)">Next ›</button>
+  </div>
+
+</div><!-- end consult-overlay -->
+
+
+<script>
+function openCase(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-case-' + id).classList.add('active');
+}
+function goHome() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-home').classList.add('active');
+}
+function toggleIntake() {
+  const panel = document.getElementById('intake-panel');
+  panel.classList.toggle('open');
+  const toggle = panel.previousElementSibling;
+  toggle.textContent = panel.classList.contains('open')
+    ? '− collapse intake options'
+    : '+ add files · tap to see all options';
+}
+function toggleSources() {
+  const expanded = document.getElementById('sources-expanded');
+  expanded.classList.toggle('open');
+  const collapsed = expanded.previousElementSibling;
+  const icon = expanded.classList.contains('open') ? '⊟' : '⊞';
+  collapsed.querySelector('span:first-child').textContent = icon + ' \u00a014 items packaged';
+}
+
+/* ── Consultation Mode ── */
+let cCurrent = 1;
+const C_TOTAL = 6;
+
+function enterConsultMode() {
+  cCurrent = 1;
+  updateConsultSlide();
+  document.getElementById('consult-overlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  buildDots();
+}
+function exitConsultMode() {
+  document.getElementById('consult-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+function consultNav(dir) {
+  cCurrent = Math.max(1, Math.min(C_TOTAL, cCurrent + dir));
+  updateConsultSlide();
+}
+function goToSlide(n) {
+  cCurrent = n;
+  updateConsultSlide();
+}
+function updateConsultSlide() {
+  document.querySelectorAll('.consult-slide').forEach(s => s.classList.remove('active'));
+  document.getElementById('cs-' + cCurrent).classList.add('active');
+
+  document.getElementById('c-indicator').textContent = cCurrent + ' / ' + C_TOTAL;
+  document.getElementById('c-progress').style.width = ((cCurrent / C_TOTAL) * 100) + '%';
+
+  const prev = document.getElementById('c-prev');
+  const next = document.getElementById('c-next');
+  prev.disabled = cCurrent === 1;
+  if (cCurrent === C_TOTAL) {
+    next.textContent = 'Done ✓';
+    next.classList.add('c-btn--finish');
+    next.onclick = exitConsultMode;
+  } else {
+    next.textContent = 'Next ›';
+    next.classList.remove('c-btn--finish');
+    next.onclick = function(){ consultNav(1); };
+  }
+
+  document.querySelectorAll('.nav-dot').forEach((d, i) => {
+    d.classList.toggle('active', i + 1 === cCurrent);
+  });
+
+  document.getElementById('consult-body').scrollTop = 0;
+}
+function buildDots() {
+  const container = document.getElementById('c-dots');
+  container.innerHTML = '';
+  for (let i = 1; i <= C_TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'nav-dot' + (i === 1 ? ' active' : '');
+    d.onclick = (function(n){ return function(){ goToSlide(n); }; })(i);
+    container.appendChild(d);
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('consult-overlay').classList.contains('active')) return;
+  if (e.key === 'ArrowRight' && cCurrent < C_TOTAL) consultNav(1);
+  if (e.key === 'ArrowLeft'  && cCurrent > 1)       consultNav(-1);
+  if (e.key === 'Escape') exitConsultMode();
+});
+</script>
+
+</body>
+</html>
