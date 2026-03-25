@@ -1,4 +1,4 @@
-import { exportCaseMarkdown } from '../app/application/exportCase.js';
+import { exportCaseMarkdown } from '../../app/application/exportCase.js';
 import {
   addClaim,
   addLegalNote,
@@ -7,15 +7,15 @@ import {
   removeClaim,
   removeLegalNote,
   updateClaim
-} from '../app/domain/claimsOps.js';
-import { setEvidenceCategory } from '../app/domain/evidenceOps.js';
-import { needsExportReminder } from '../app/domain/exportReminder.js';
-import { detectGaps } from '../app/domain/gapDetector.js';
-import { buildTimeline } from '../app/domain/timeline.js';
-import { parseImazingCsv } from '../app/messages/parsers/imazingCsv.js';
-import { parseSmsXml } from '../app/messages/parsers/smsXml.js';
-import { IndexedDbCaseRepository } from '../app/storage/IndexedDbCaseRepository.js';
-import type { Case, Claim, Evidence, EvidenceCategory, LegalNote, Message, TimelineItem } from '../app/domain/types.js';
+} from '../../app/domain/claimsOps.js';
+import { setEvidenceCategory } from '../../app/domain/evidenceOps.js';
+import { needsExportReminder } from '../../app/domain/exportReminder.js';
+import { detectGaps } from '../../app/domain/gapDetector.js';
+import { buildTimeline } from '../../app/domain/timeline.js';
+import { parseImazingCsv } from '../../app/messages/parsers/imazingCsv.js';
+import { parseSmsXml } from '../../app/messages/parsers/smsXml.js';
+import { IndexedDbCaseRepository } from '../../app/storage/IndexedDbCaseRepository.js';
+import type { Case, Claim, Evidence, EvidenceCategory, LegalNote, Message, TimelineItem } from '../../app/domain/types.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 

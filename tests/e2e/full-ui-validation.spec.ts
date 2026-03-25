@@ -23,7 +23,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES_DIR = path.resolve(__dirname, '../fixtures');
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  // v1 UI is served at /v1/
+  await page.goto('/v1/');
   await page.evaluate(() => indexedDB.deleteDatabase('case-organizer'));
   await page.reload();
   await page.waitForSelector('#add-evidence-form', { state: 'visible' });
