@@ -1,8 +1,10 @@
 import type { Case, Claim, Evidence, Gap, LegalNote, Lawyer, Message, TimelineItem } from '../domain/types.js';
 import type { CaseRepository } from '../ports/CaseRepository.js';
 
-type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes'> & {
+type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes' | 'tenancy' | 'timeline'> & {
   lastExportedAt: string | null;
+  tenancy?: { startDate: string | null; monthlyRentOriginal: number | null; monthlyRentCurrent: number | null };
+  timeline?: unknown[]; // stored as-is but treated as transient; rebuilt from evidence/messages on load
 };
 
 type PersistedEvidence = Omit<Evidence, 'dateTime' | 'provenance'> & {
@@ -222,7 +224,14 @@ function serializeCase(caseData: Case): PersistedCase {
   // v2 optional fields — only include when present
   if (caseData.parties !== undefined) persisted.parties = caseData.parties;
   if (caseData.property !== undefined) persisted.property = caseData.property;
-  if (caseData.tenancy !== undefined) persisted.tenancy = caseData.tenancy;
+  if (caseData.tenancy !== undefined) {
+    persisted.tenancy = {
+      ...caseData.tenancy,
+      startDate: caseData.tenancy.startDate instanceof Date
+        ? caseData.tenancy.startDate.toISOString()
+        : caseData.tenancy.startDate,
+    };
+  }
   if (caseData.clientGoal !== undefined) persisted.clientGoal = caseData.clientGoal;
   if (caseData.status !== undefined) persisted.status = caseData.status;
   if (caseData.source !== undefined) persisted.source = caseData.source;
@@ -253,10 +262,19 @@ function deserializeCase(
   // v2 optional fields — restore when present
   if (caseData.parties !== undefined) result.parties = caseData.parties;
   if (caseData.property !== undefined) result.property = caseData.property;
-  if (caseData.tenancy !== undefined) result.tenancy = caseData.tenancy;
+  if (caseData.tenancy !== undefined) {
+    result.tenancy = {
+      ...caseData.tenancy,
+      startDate: caseData.tenancy.startDate != null
+        ? new Date(caseData.tenancy.startDate)
+        : null,
+    };
+  }
   if (caseData.clientGoal !== undefined) result.clientGoal = caseData.clientGoal;
   if (caseData.status !== undefined) result.status = caseData.status;
   if (caseData.source !== undefined) result.source = caseData.source;
+  // timeline is a transient/derived field — stored for caching but treated as untrusted on load.
+  // Phase 12 will rebuild it from evidence and messages via buildTimeline().
   if (caseData.timeline !== undefined) result.timeline = caseData.timeline as TimelineItem[];
   if (caseData.gaps !== undefined) result.gaps = caseData.gaps as Gap[];
   if (caseData.libraryRefs !== undefined) result.libraryRefs = caseData.libraryRefs;

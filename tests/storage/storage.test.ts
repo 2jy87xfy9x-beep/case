@@ -349,6 +349,11 @@ describe('IndexedDbCaseRepository smoke', () => {
     expect(loaded?.libraryRefs).toEqual(['ref-a', 'ref-b']);
     expect(loaded?.gaps).toHaveLength(1);
     expect(loaded?.gaps?.[0].id).toBe('gap.missingLease');
+    expect(loaded?.tenancy?.monthlyRentOriginal).toBe(1500);
+    expect(loaded?.tenancy?.monthlyRentCurrent).toBe(1600);
+    // startDate should be a Date instance
+    expect(loaded?.tenancy?.startDate).toBeInstanceOf(Date);
+    expect(loaded?.tenancy?.startDate?.toISOString().startsWith('2024')).toBe(true);
   });
 });
 
