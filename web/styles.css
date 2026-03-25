@@ -327,6 +327,17 @@ body {
   line-height: 1.4;
 }
 .fact-row__arrow { color: #888; flex-shrink: 0; }
+.fact-row--link {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  padding: 0;
+}
+.fact-row--link:hover { background: #f0f4ff; }
+.fact-row--link:hover .fact-row__arrow { color: #4a90d9; }
 
 /* ── Gap rows ──────────────────────────────────────────────────────────── */
 

@@ -6,6 +6,7 @@
  */
 
 import { autoProcess } from '../app/application/autoProcess.js';
+import { extractKeyFacts } from '../app/application/filterKeyFacts.js';
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
 import { importScreenshotOcr } from '../app/application/importScreenshotOcr.js';
 import { createCase } from '../app/domain/factories.js';
@@ -337,36 +338,52 @@ function renderKeyFacts(c: Case): void {
   const container = document.getElementById('brief-key-facts')!;
   const empty = document.getElementById('brief-key-facts-empty')!;
 
-  // Extract dollar amounts and key dates from evidence
-  const facts: string[] = [];
-  const DOLLAR_RE = /\$[\d,]+(?:\.\d{2})?/g;
+  const facts = extractKeyFacts(c.evidence);
 
-  for (const ev of c.evidence) {
-    const matches = ev.body.match(DOLLAR_RE);
-    if (matches) {
-      for (const m of matches.slice(0, 2)) {
-        facts.push(`${m} — ${ev.title}`);
-      }
-    }
-  }
-
-  // Also add tenancy info if present
+  // Prepend tenancy info if present
+  const tenancyFacts: string[] = [];
   if (c.tenancy?.monthlyRentCurrent) {
-    facts.unshift(`$${c.tenancy.monthlyRentCurrent.toLocaleString()} — current monthly rent`);
+    tenancyFacts.push(`$${c.tenancy.monthlyRentCurrent.toLocaleString()} — current monthly rent`);
   }
   if (c.tenancy?.monthlyRentOriginal) {
-    facts.unshift(`$${c.tenancy.monthlyRentOriginal.toLocaleString()} — original monthly rent`);
+    tenancyFacts.push(`$${c.tenancy.monthlyRentOriginal.toLocaleString()} — original monthly rent`);
   }
 
-  if (facts.length === 0) {
+  if (facts.length === 0 && tenancyFacts.length === 0) {
     container.innerHTML = '';
     empty.style.display = '';
     return;
   }
   empty.style.display = 'none';
-  container.innerHTML = facts.slice(0, 8).map((f) =>
+
+  const tenancyHTML = tenancyFacts.map((f) =>
     `<div class="fact-row"><span class="fact-row__arrow">›</span><span>${esc(f)}</span></div>`
   ).join('');
+
+  const factHTML = facts.map((f) =>
+    `<button class="fact-row fact-row--link" type="button" data-ev-id="${esc(f.evidenceId)}" data-tip="Jump to source">
+      <span class="fact-row__arrow">›</span>
+      <span>${esc(f.raw)} — ${esc(f.evidenceTitle)}</span>
+    </button>`
+  ).join('');
+
+  container.innerHTML = tenancyHTML + factHTML;
+
+  container.querySelectorAll('.fact-row--link').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const details = document.getElementById('brief-sources-details') as HTMLDetailsElement;
+      if (details) details.open = true;
+      setTimeout(() => {
+        const row = document.querySelector(`[data-ev-id="${evId}"]`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          (row as HTMLElement).style.outline = '2px solid #4a90d9';
+          setTimeout(() => { (row as HTMLElement).style.outline = ''; }, 1500);
+        }
+      }, 100);
+    });
+  });
 }
 
 function renderBriefGaps(c: Case, gaps: Gap[]): void {
