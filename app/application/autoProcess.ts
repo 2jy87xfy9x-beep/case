@@ -57,6 +57,8 @@ const PDF_DOCX = new Set(['.pdf', '.docx']);
 const PDF_ONLY = new Set(['.pdf']);
 const PDF_DOCX_MSG = new Set(['.pdf', '.docx', '.msg']);
 const PDF_CSV = new Set(['.pdf', '.csv']);
+const CORRESPONDENCE_KEYWORDS = /\b(dear\s+\w|sincerely|re:|subject:|hereby\s+notify|legal\s+aid|law\s+office|attorney|counsel|representation|clinic|participant|city\s+of|department\s+of)\b/i;
+const PDF_DOCX_MSG_CORRESPONDENCE = new Set(['.pdf', '.docx', '.msg', '.txt']);
 
 function extOf(filename: string): string {
   const idx = filename.lastIndexOf('.');
@@ -110,6 +112,11 @@ export function classify(filename: string): ClassifyResult {
   // .csv with no payment keyword → message
   if (ext === '.csv') {
     return { category: 'message', label: 'Message Export' };
+  }
+
+  // correspondence — formal letters with salutation or institutional header
+  if (PDF_DOCX_MSG_CORRESPONDENCE.has(ext) && CORRESPONDENCE_KEYWORDS.test(lower)) {
+    return { category: 'correspondence', label: 'Official Correspondence' };
   }
 
   // repair
@@ -243,6 +250,9 @@ export function classifyFromContent(text: string): ClassifyResult | null {
   }
   if (/non[- ]payment of rent|notice to pay/i.test(headerLower)) {
     return { category: 'fee-notice', label: extractDocTitle(text, 'Fee / Legal Notice') };
+  }
+  if (/dear\s+\w|hereby\s+notify|this\s+letter|on\s+behalf\s+of|legal\s+aid|law\s+office/i.test(header)) {
+    return { category: 'correspondence', label: extractDocTitle(text, 'Official Correspondence') };
   }
 
   // ── 2. Full-text search (lower priority, avoids cross-contamination) ─────

@@ -19,10 +19,13 @@
     <div id="screen-home" class="screen active">
       <div class="topbar">
         <span class="topbar__title">Cases</span>
-        <span class="topbar__sync">
-          <span class="sync-dot"></span>
-          saved locally
-        </span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="topbar__add-btn" id="topbar-add-btn" type="button">↑ Add files</button>
+          <span class="topbar__sync">
+            <span class="sync-dot"></span>
+            saved locally
+          </span>
+        </div>
       </div>
 
       <div class="canvas">
@@ -33,16 +36,14 @@
         <p id="case-list-empty" class="empty-state" style="display:none">No cases yet. Add files below to get started.</p>
 
         <div class="section-label">Library</div>
-        <div class="case-list">
-          <div class="case-row" id="btn-goto-library">
-            <span class="case-row__icon">─</span>
-            <div class="case-row__body">
-              <div class="case-row__name">General Legal Docs</div>
-              <div class="case-row__meta" id="library-meta">0 items · not yet assigned to a case</div>
-            </div>
-            <span class="case-row__status status--lib">library</span>
-            <span class="case-row__arrow">›</span>
+        <div class="case-row" id="btn-goto-library" style="cursor:pointer">
+          <span class="case-row__icon">─</span>
+          <div class="case-row__body">
+            <div class="case-row__name">Legal Reference Library</div>
+            <div class="case-row__meta" id="library-meta">0 items</div>
           </div>
+          <span class="case-row__status status--lib" id="library-count-badge">0</span>
+          <span class="case-row__arrow">›</span>
         </div>
 
         <div class="intake-toggle" id="intake-toggle">+ add files &nbsp;·&nbsp; tap to see all options</div>
@@ -104,6 +105,10 @@
           <p id="import-result" style="font-size:11px;color:#888;margin-top:6px;" role="status" aria-live="polite"></p>
         </div>
 
+        <p style="font-size:10px;color:#bbb;margin-top:6px;line-height:1.5">
+          <strong style="color:#999">Add files</strong> attaches documents to a case as evidence.
+          Use <strong style="color:#999">Library</strong> for general reference docs (statutes, tenant rights guides) not tied to a specific case.
+        </p>
         <p id="intake-status" style="font-size:11px;color:#888;margin-top:8px;" role="status" aria-live="polite"></p>
       </div>
 
@@ -127,88 +132,116 @@
         ✦ &nbsp;Auto-organized · last processed just now
       </div>
 
+      <!-- Filter bar -->
+      <div class="canvas-filters" id="canvas-filters">
+        <button class="cf-btn active" data-filter="all" type="button">All</button>
+        <button class="cf-btn" data-filter="timeline" type="button">📅 Timeline</button>
+        <button class="cf-btn" data-filter="review" type="button">⚠ Review</button>
+        <button class="cf-btn" data-filter="sources" type="button">📎 Sources</button>
+        <button class="cf-btn" data-filter="gaps" type="button">△ Gaps</button>
+      </div>
+
       <div class="detail-canvas" id="brief-canvas">
 
-        <!-- 1. Case Summary -->
-        <div class="brief-section">
-          <div class="brief-section__header">
-            <span>Case Summary</span>
-            <span style="font-size:9px;color:#bbb;letter-spacing:0.06em" id="brief-summary-label">AUTO-GENERATED</span>
+        <!-- PANEL: ALL (default) -->
+        <div class="canvas-panel active" id="panel-all">
+
+          <!-- Case Summary -->
+          <div class="brief-section">
+            <div class="brief-section__header">
+              <span>Case Summary</span>
+              <span style="font-size:9px;color:#bbb;letter-spacing:0.06em" id="brief-summary-label">AUTO-GENERATED</span>
+            </div>
+            <div class="brief-summary" id="brief-summary-text">—</div>
           </div>
-          <div class="brief-summary" id="brief-summary-text">—</div>
-        </div>
 
-        <!-- 2. Legal Framing -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Legal Framing</span></div>
-          <div class="jurisdiction-field">
-            <label for="brief-jurisdiction">Jurisdiction</label>
-            <input type="text" id="brief-jurisdiction" placeholder="e.g. California, Los Angeles" autocomplete="off" />
+          <!-- Legal Framing -->
+          <div class="brief-section">
+            <div class="brief-section__header"><span>Legal Framing</span></div>
+            <div class="jurisdiction-field">
+              <label for="brief-jurisdiction">Jurisdiction</label>
+              <input type="text" id="brief-jurisdiction" placeholder="e.g. California, Los Angeles" autocomplete="off" />
+            </div>
+            <div id="brief-claims-list"><!-- Rendered by JS --></div>
+            <p id="brief-claims-empty" class="claims-empty-state" style="display:none"></p>
           </div>
-          <div id="brief-claims-list"><!-- Rendered by JS --></div>
-          <p id="brief-claims-empty" class="empty-state" style="display:none">No discussion topics added yet.</p>
-        </div>
 
-        <!-- 3. Client Goal -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Client Goal</span></div>
-          <textarea class="goal-textarea" id="brief-client-goal" placeholder="What outcome does the client want?"></textarea>
-        </div>
-
-        <!-- 4. Timeline -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Timeline</span></div>
-          <div id="brief-timeline"><!-- Rendered by JS --></div>
-          <p id="brief-timeline-empty" class="empty-state" style="display:none">No timeline items yet.</p>
-        </div>
-
-        <!-- 5. Key Facts -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Key Facts</span></div>
-          <div id="brief-key-facts"><!-- Rendered by JS --></div>
-          <p id="brief-key-facts-empty" class="empty-state" style="display:none">No key facts extracted yet.</p>
-        </div>
-
-        <!-- 6b. Needs Review -->
-        <div class="brief-section" id="brief-review-section" style="display:none">
-          <div class="brief-section__header">
-            <span>Needs Review</span>
-            <span class="review-badge" id="brief-review-badge">0</span>
+          <!-- Client Goal -->
+          <div class="brief-section">
+            <div class="brief-section__header">
+              <span>Client Goal</span>
+              <button id="btn-goal-builder" type="button" style="font-size:9px;letter-spacing:0.08em;background:none;border:1px solid #e0e0e0;color:#888;padding:2px 7px;cursor:pointer;font-family:inherit">Build ↗</button>
+            </div>
+            <textarea class="goal-textarea" id="brief-client-goal" placeholder="What outcome does the client want?"></textarea>
+            <div id="brief-goal-builder" style="display:none"></div>
           </div>
-          <p style="font-size:12px;color:#888;margin:0 0 8px">These items couldn't be read clearly. Rename them, change their category, or use Re-process to try OCR again.</p>
-          <div id="brief-review-list"><!-- Rendered by JS --></div>
+
+          <!-- Key Facts -->
+          <div class="brief-section">
+            <div class="brief-section__header"><span>Key Facts</span></div>
+            <div id="brief-key-facts"><!-- Rendered by JS --></div>
+            <p id="brief-key-facts-empty" class="empty-state" style="display:none">No key facts extracted yet.</p>
+          </div>
+
+        </div><!-- /panel-all -->
+
+        <!-- PANEL: TIMELINE -->
+        <div class="canvas-panel" id="panel-timeline">
+          <div class="brief-section">
+            <div class="brief-section__header"><span>Timeline</span>
+              <span style="font-size:9px;color:#bbb">Dated items only</span>
+            </div>
+            <div id="brief-timeline"><!-- Rendered by JS --></div>
+            <p id="brief-timeline-empty" class="empty-state" style="display:none">No dated items yet. Add dates to evidence to build a timeline.</p>
+          </div>
         </div>
 
-        <!-- 6. Gaps -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Gaps</span></div>
-          <div id="brief-gaps-list"><!-- Rendered by JS --></div>
-          <p id="brief-gaps-empty" class="empty-state" style="display:none">No gaps detected. Case looks complete.</p>
+        <!-- PANEL: REVIEW -->
+        <div class="canvas-panel" id="panel-review">
+          <div class="brief-section" id="brief-review-section">
+            <div class="brief-section__header">
+              <span>Needs Review</span>
+              <span class="review-badge" id="brief-review-badge">0</span>
+            </div>
+            <p style="font-size:12px;color:#888;margin:0 0 12px">These items couldn't be read clearly. Tap to expand, then edit or re-process.</p>
+            <div id="brief-review-list"><!-- Rendered by JS --></div>
+          </div>
         </div>
 
-        <!-- 7. Library Docs Surfaced -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Library Docs Surfaced</span></div>
-          <div id="brief-library-refs"><!-- Rendered by JS --></div>
-          <p id="brief-library-empty" class="empty-state">No library docs surfaced yet.</p>
+        <!-- PANEL: SOURCES -->
+        <div class="canvas-panel" id="panel-sources">
+          <div class="brief-section">
+            <div class="brief-section__header">
+              <span>Source Files</span>
+              <div style="display:flex;gap:6px;align-items:center">
+                <span id="brief-sources-label" style="font-size:9px;color:#bbb">0 files</span>
+                <button id="btn-reprocess" type="button"
+                  style="background:none;border:1px solid #ccc;color:#555;font-size:10px;padding:2px 7px;cursor:pointer;font-family:inherit"
+                  data-tip="Re-run OCR on photos">Re-process ↺</button>
+              </div>
+            </div>
+            <div id="brief-sources-list"><!-- Rendered by JS --></div>
+          </div>
+
+          <!-- Library Docs Surfaced -->
+          <div class="brief-section">
+            <div class="brief-section__header"><span>Library Docs Surfaced</span></div>
+            <div id="brief-library-refs"><!-- Rendered by JS --></div>
+            <p id="brief-library-empty" class="empty-state">No library docs surfaced yet.</p>
+          </div>
         </div>
 
-        <!-- 8. Source Files -->
-        <div class="brief-section">
-          <div class="brief-section__header"><span>Source Files</span></div>
-          <details class="sources-details" id="brief-sources-details">
-            <summary>
-              <span id="brief-sources-label">0 files</span>
-              <span style="font-size:11px;color:#aaa">▸</span>
-              <button id="btn-reprocess" type="button"
-                style="margin-left:auto;background:none;border:1px solid #ccc;color:#555;font-size:11px;padding:3px 8px;border-radius:3px;cursor:pointer;font-family:inherit"
-                data-tip="Re-run OCR on photos">Re-process ↺</button>
-            </summary>
-            <div class="sources-details__body" id="brief-sources-list"><!-- Rendered by JS --></div>
-          </details>
+        <!-- PANEL: GAPS -->
+        <div class="canvas-panel" id="panel-gaps">
+          <div class="brief-section">
+            <div class="brief-section__header"><span>Gaps</span></div>
+            <p style="font-size:11px;color:#aaa;margin:0 0 10px;line-height:1.6">Gaps are evidence categories the app considers important for a tenant-landlord case but hasn't found in your uploads. Click a gap to see what we look for.</p>
+            <div id="brief-gaps-list"><!-- Rendered by JS --></div>
+            <p id="brief-gaps-empty" class="empty-state" style="display:none">No gaps detected. Case looks complete.</p>
+          </div>
         </div>
 
-      </div>
+      </div><!-- /detail-canvas -->
 
       <div class="export-bar">
         <span class="export-bar__meta" id="brief-export-meta">0 items · 0 gaps</span>
@@ -279,8 +312,8 @@
             <label for="settings-export-pref">Export format</label>
             <select id="settings-export-pref">
               <option value="markdown">Markdown (.md)</option>
-              <option value="zip">ZIP archive</option>
-              <option value="both">Both (markdown + zip)</option>
+              <option value="zip">HTML Report (.html)</option>
+              <option value="both">Both (markdown + HTML)</option>
             </select>
           </div>
         </div>
@@ -380,6 +413,7 @@
       </div>
     </div>
 
+    <div id="resume-badge" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#e8e8e8;font-size:11px;padding:5px 14px;border-radius:20px;z-index:500;pointer-events:none;transition:opacity 0.3s">↩ Resumed from last session</div>
     <script type="module" src="/main.ts"></script>
   </body>
 </html>

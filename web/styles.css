@@ -927,28 +927,7 @@ body {
 }
 .goal-textarea:focus { border-color: #888; }
 
-/* ── CSS Tooltips ──────────────────────────────────────────────────────── */
-
-[data-tip] { position: relative; }
-[data-tip]::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1a1a1a;
-  color: #e8e8e8;
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 3px;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s;
-  z-index: 500;
-  border: 1px solid #333;
-}
-[data-tip]:hover::after { opacity: 1; }
+/* ── CSS Tooltips (removed — replaced by JS tooltip singleton in main.ts) ── */
 
 /* ── Styled confirm dialog ─────────────────────────────────────────────── */
 
@@ -1053,4 +1032,273 @@ body {
   text-overflow: ellipsis;
   margin-top: 1px;
   max-width: 200px;
+}
+
+/* ── Canvas filter bar ──────────────────────────────────────────────── */
+.canvas-filters {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.cf-btn {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  background: none;
+  border: 1px solid #e0e0e0;
+  color: #888;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cf-btn:hover { border-color: #aaa; color: #444; }
+.cf-btn.active { background: #111; color: #fff; border-color: #111; }
+.cf-btn:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+
+/* ── Canvas panels ──────────────────────────────────────────────────── */
+.canvas-panel { display: none; }
+.canvas-panel.active { display: block; }
+
+/* ── Claims empty state ──────────────────────────────────────────────── */
+.claims-empty-state {
+  font-size: 12px;
+  color: #888;
+  padding: 10px 0;
+  line-height: 1.6;
+}
+.claims-empty-state strong { color: #555; display: block; margin-bottom: 4px; }
+.claims-example {
+  display: inline-block;
+  font-size: 10px;
+  color: #888;
+  border: 1px solid #e0e0e0;
+  padding: 2px 7px;
+  margin: 2px 2px 2px 0;
+  cursor: pointer;
+}
+.claims-example:hover { border-color: #999; color: #444; }
+.claims-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.claims-add-input {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  outline: none;
+  color: #111;
+  background: #fff;
+}
+.claims-add-input:focus { border-color: #888; }
+.claims-add-btn {
+  font-family: inherit;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.claims-add-btn:hover { background: #333; }
+.claims-add-btn:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+
+/* ── Gap detail expand ───────────────────────────────────────────────── */
+.gap-row__expand {
+  font-size: 11px;
+  color: #7a4a00;
+  line-height: 1.6;
+  margin: 6px 0 4px;
+  border-top: 1px solid #f0dfc8;
+  padding-top: 6px;
+}
+.gap-detail-looks, .gap-detail-found { margin-bottom: 4px; }
+.gap-detail-label { font-weight: 600; }
+
+/* ── Topbar add button ───────────────────────────────────────────────── */
+.topbar__add-btn {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.topbar__add-btn:hover { background: #333; }
+.topbar__add-btn:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+
+/* ── Needs Review items ──────────────────────────────────────────────── */
+.review-item {
+  margin-bottom: 6px;
+  background: #fff;
+  border-left: 3px solid #b85c00;
+  padding: 0;
+  overflow: hidden;
+}
+.review-item__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.review-item__label {
+  flex: 1;
+  font-size: 12px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-item__reason {
+  font-size: 10px;
+  color: #b85c00;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+.review-item__toggle {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+.review-item__toggle:hover { color: #555; }
+.review-item__body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid #f0e0d0;
+  background: #fffaf5;
+}
+.review-item__edit {
+  margin-top: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  border: 1px solid #ccc;
+  color: #333;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.review-item__edit:hover { border-color: #888; }
+.review-item__edit:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+.review-ocr-preview {
+  font-family: monospace;
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 6px 8px;
+  border-left: 2px solid #e0e0e0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 4px;
+}
+
+/* ── Fact source drawer ──────────────────────────────────────────────── */
+.fact-source-drawer {
+  background: #fafafa;
+  border: 1px solid #e0e0e0;
+  border-left: 3px solid #4a90d9;
+  padding: 10px 12px;
+  margin: 4px 0 8px;
+  font-size: 12px;
+}
+.fsd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.fsd-close {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fsd-close:hover { color: #111; }
+.fsd-body {
+  font-family: monospace;
+  font-size: 11px;
+  color: #555;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #eee;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+.fsd-footer { display: flex; gap: 6px; }
+.fsd-edit {
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  border: 1px solid #ccc;
+  color: #555;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.fsd-edit:hover { border-color: #888; color: #111; }
+.fsd-edit:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
+
+/* ── Sentence range copy ─────────────────────────────────────────────── */
+#ev-sentence-view {
+  font-family: monospace;
+  font-size: 11px;
+  color: #ccc;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  padding: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.8;
+  user-select: none;
+}
+.sent-unit:hover { background: #2a2a2a; }
+
+/* ── Explicit focus states ───────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
+}
+.dock__item:focus-visible { outline-color: #111; }
+.back-btn:focus-visible { outline-color: #555; }
+
+/* ── User select for text content ────────────────────────────────────── */
+.ocr-preview,
+.review-ocr-preview,
+.fsd-body,
+.brief-summary,
+.goal-textarea {
+  user-select: text;
 }

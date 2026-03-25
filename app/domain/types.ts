@@ -21,7 +21,8 @@ export type OcrMethod = 'vision' | 'tesseract' | 'manual' | 'cloud';
 /** User- or review-assigned bucket for gap detection and export (Phase 5). */
 export type EvidenceCategory =
   | 'lease' | 'payment' | 'rent-notice' | 'fee-notice' | 'other'  // v1 — unchanged
-  | 'repair' | 'photo' | 'message' | 'amendment';                  // v2 additions
+  | 'repair' | 'photo' | 'message' | 'amendment'                  // v2 additions
+  | 'correspondence';                                               // v2.1 — official correspondence
 
 export interface Evidence {
   id: string;

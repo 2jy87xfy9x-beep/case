@@ -100,7 +100,80 @@ function inferType(filename: string): string {
 
 const SCREENS = ['screen-home', 'screen-brief', 'screen-library', 'screen-settings'];
 
+let _prevScreen: string | null = null;
+let _undoNavTimer: ReturnType<typeof setTimeout> | null = null;
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showToast(msg: string, duration = 2000): void {
+  let toast = document.getElementById('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.style.cssText = 'position:fixed;bottom:70px;right:16px;background:#1a1a1a;color:#e8e8e8;font-size:11px;padding:6px 14px;border-radius:3px;z-index:9998;pointer-events:none;opacity:0;transition:opacity 0.15s;border:1px solid #333';
+    document.body.appendChild(toast);
+  }
+  if (_toastTimer) clearTimeout(_toastTimer);
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  _toastTimer = setTimeout(() => {
+    toast!.style.opacity = '0';
+  }, duration);
+}
+
+function showResumeBadge(): void {
+  const badge = document.getElementById('resume-badge')!;
+  badge.style.display = '';
+  badge.style.opacity = '1';
+  setTimeout(() => {
+    badge.style.opacity = '0';
+    setTimeout(() => { badge.style.display = 'none'; }, 300);
+  }, 2500);
+}
+
+function showUndoNav(label: string): void {
+  let el = document.getElementById('undo-nav-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'undo-nav-toast';
+    el.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#e8e8e8;font-size:11px;padding:5px 14px;border-radius:3px;z-index:9997;display:flex;align-items:center;gap:10px;border:1px solid #333;opacity:0;transition:opacity 0.15s';
+    document.body.appendChild(el);
+  }
+  if (_undoNavTimer) clearTimeout(_undoNavTimer);
+  el.innerHTML = `${esc(label)} <button id="undo-nav-btn" type="button" style="background:none;border:none;color:#4a90d9;cursor:pointer;font-size:11px;padding:0;font-family:inherit">↩ Undo</button>`;
+  el.style.opacity = '1';
+  document.getElementById('undo-nav-btn')?.addEventListener('click', () => {
+    if (_prevScreen && currentCase) {
+      showScreen('screen-brief');
+    }
+    el!.style.opacity = '0';
+  });
+  _undoNavTimer = setTimeout(() => { el!.style.opacity = '0'; }, 4000);
+}
+
+function showCanvasFilter(filter: string): void {
+  document.querySelectorAll('.cf-btn').forEach((btn) => {
+    btn.classList.toggle('active', (btn as HTMLElement).dataset.filter === filter);
+  });
+  document.querySelectorAll('.canvas-panel').forEach((panel) => {
+    panel.classList.remove('active');
+  });
+  const panelMap: Record<string, string> = {
+    all: 'panel-all',
+    timeline: 'panel-timeline',
+    review: 'panel-review',
+    sources: 'panel-sources',
+    gaps: 'panel-gaps',
+  };
+  const panelId = panelMap[filter] ?? 'panel-all';
+  document.getElementById(panelId)?.classList.add('active');
+  // Save to sessionStorage for resumability
+  if (currentCase) {
+    sessionStorage.setItem(`case.${currentCase.id}.filter`, filter);
+  }
+}
+
 function showScreen(id: string): void {
+  const prev = document.querySelector('.screen.active')?.id ?? null;
   for (const sid of SCREENS) {
     const el = document.getElementById(sid)!;
     el.classList.toggle('active', sid === id);
@@ -118,6 +191,12 @@ function showScreen(id: string): void {
       : '';
     btn.classList.toggle('active', targetId === id);
   });
+
+  // Undo navigation toast
+  if (prev && prev !== id && prev === 'screen-brief') {
+    _prevScreen = prev;
+    showUndoNav('Back to case');
+  }
 }
 
 // ── Home screen ────────────────────────────────────────────────────────────────
@@ -156,6 +235,7 @@ function renderCaseList(): void {
       const c = allCases.find((x) => x.id === id);
       if (!await showConfirm(`Delete "${c?.title ?? id}"?`, 'All evidence and documents in this case will be removed. This cannot be undone.')) return;
       await repo.deleteCase(id);
+      showToast('Case deleted');
       await loadHome();
     });
   });
@@ -183,7 +263,12 @@ function caseRowHTML(c: Case): string {
 function updateLibraryMeta(): void {
   const items = loadLibrary();
   const meta = document.getElementById('library-meta')!;
-  meta.textContent = `${items.length} item${items.length !== 1 ? 's' : ''} · not yet assigned to a case`;
+  const badge = document.getElementById('library-count-badge');
+  const count = items.length;
+  meta.textContent = count === 0
+    ? 'Tenant rights, ordinances, templates, correspondence'
+    : `${count} document${count !== 1 ? 's' : ''} · tenant rights, ordinances, templates`;
+  if (badge) badge.textContent = count > 0 ? String(count) : '─';
 }
 
 // ── Case Brief ─────────────────────────────────────────────────────────────────
@@ -194,6 +279,9 @@ async function openCase(caseId: string): Promise<void> {
   currentCase = c;
   renderBrief(c);
   showScreen('screen-brief');
+  // Save current case to sessionStorage for resumability
+  sessionStorage.setItem('last.caseId', c.id);
+  sessionStorage.setItem('last.screen', 'brief');
 }
 
 async function reprocessPhotos(c: Case): Promise<void> {
@@ -260,6 +348,7 @@ async function reprocessPhotos(c: Case): Promise<void> {
     }
 
     statusEl.textContent = `Re-processed ${updated} item${updated !== 1 ? 's' : ''}.`;
+    showToast(`Re-processed ${updated} item${updated !== 1 ? 's' : ''}`);
     setTimeout(() => { statusEl.textContent = ''; }, 3000);
     await openCase(c.id);
   };
@@ -325,6 +414,75 @@ function renderBrief(c: Case): void {
   goalEl.value = c.clientGoal ?? '';
   goalEl.onchange = () => saveCaseField(c.id, 'clientGoal', goalEl.value);
 
+  // Goal builder
+  const goalBuilderBtn = document.getElementById('btn-goal-builder');
+  const goalBuilderDiv = document.getElementById('brief-goal-builder')!;
+  if (goalBuilderBtn) {
+    goalBuilderBtn.onclick = () => {
+      const isOpen = goalBuilderDiv.style.display !== 'none';
+      if (isOpen) {
+        goalBuilderDiv.style.display = 'none';
+        goalBuilderBtn.textContent = 'Build ↗';
+        return;
+      }
+      goalBuilderDiv.style.display = '';
+      goalBuilderBtn.textContent = 'Close ↙';
+
+      const gaps = detectGaps(c);
+      const gapNames = gaps.map(g => g.displayName).join(', ') || 'no specific gaps identified';
+      const address = c.property?.address || 'the rental property';
+      const tenant = c.parties?.tenant || localStorage.getItem(TENANT_NAME_KEY) || 'the tenant';
+      const evCount = c.evidence.length;
+
+      goalBuilderDiv.innerHTML = `
+        <div style="background:#f9f9f9;border:1px solid #e0e0e0;padding:12px;margin-top:8px">
+          <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#aaa;margin-bottom:8px">Goal Builder</div>
+          <div style="font-size:11px;color:#666;margin-bottom:10px;line-height:1.6">Answer these to assemble a goal statement from your case context.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:3px">Desired outcome</label>
+              <select id="gb-outcome" style="width:100%;font-family:inherit;font-size:12px;border:1px solid #ddd;padding:5px 7px;background:#fff;outline:none;color:#111">
+                <option value="resolve the dispute">Resolve the dispute fairly</option>
+                <option value="recover security deposit">Recover withheld security deposit</option>
+                <option value="stop unlawful eviction">Stop an unlawful eviction</option>
+                <option value="reduce rent increase">Challenge an illegal rent increase</option>
+                <option value="force repairs">Compel landlord to make required repairs</option>
+                <option value="document for court">Document the case for small claims / housing court</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:3px">Timeline urgency</label>
+              <select id="gb-urgency" style="width:100%;font-family:inherit;font-size:12px;border:1px solid #ddd;padding:5px 7px;background:#fff;outline:none;color:#111">
+                <option value="as soon as possible">As soon as possible</option>
+                <option value="within 30 days">Within 30 days</option>
+                <option value="before next court date">Before next court date</option>
+                <option value="before lease expiration">Before lease expiration</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:10px;color:#888;display:block;margin-bottom:3px">Primary concern in one sentence (optional)</label>
+              <input id="gb-concern" type="text" placeholder="e.g. landlord refused repairs for 6 months" style="width:100%;font-family:inherit;font-size:12px;border:1px solid #ddd;padding:5px 7px;background:#fff;outline:none;color:#111;box-sizing:border-box" />
+            </div>
+            <button id="gb-assemble" type="button" style="font-family:inherit;font-size:11px;background:#111;color:#fff;border:none;padding:8px;cursor:pointer;letter-spacing:0.06em;margin-top:4px">Assemble Goal Statement</button>
+          </div>
+        </div>`;
+
+      document.getElementById('gb-assemble')?.addEventListener('click', () => {
+        const outcome = (document.getElementById('gb-outcome') as HTMLSelectElement).value;
+        const urgency = (document.getElementById('gb-urgency') as HTMLSelectElement).value;
+        const concern = (document.getElementById('gb-concern') as HTMLInputElement).value.trim();
+        const concernClause = concern ? ` The main concern is: ${concern}.` : '';
+        const gapClause = gaps.length > 0 ? ` Outstanding issues include: ${gapNames}.` : '';
+        const assembled = `${tenant} at ${address} seeks to ${outcome} ${urgency}, with ${evCount} evidence item${evCount !== 1 ? 's' : ''} supporting the case.${concernClause}${gapClause}`;
+        goalEl.value = assembled;
+        saveCaseField(c.id, 'clientGoal', assembled);
+        goalBuilderDiv.style.display = 'none';
+        goalBuilderBtn!.textContent = 'Build ↗';
+        showToast('Goal statement assembled');
+      });
+    };
+  }
+
   // Timeline
   renderBriefTimeline(c);
 
@@ -354,6 +512,10 @@ function renderBrief(c: Case): void {
   // Consult case label
   const consultLabel = document.getElementById('consult-case-label')!;
   consultLabel.textContent = c.title;
+
+  // Restore saved filter for resumability
+  const savedFilter = currentCase ? sessionStorage.getItem(`case.${currentCase.id}.filter`) ?? 'all' : 'all';
+  showCanvasFilter(savedFilter);
 }
 
 async function saveCaseField(caseId: string, field: string, value: string): Promise<void> {
@@ -376,6 +538,56 @@ function renderBriefClaims(c: Case): void {
   if (c.claims.length === 0) {
     list.innerHTML = '';
     empty.style.display = '';
+    empty.innerHTML = `<strong>No discussion topics yet.</strong>
+      Discussion topics are things you want to ask a lawyer about. They appear automatically when the app detects relevant patterns in your evidence, or you can add one manually.
+      <div style="margin-top:8px">
+        <span style="font-size:10px;color:#aaa;display:block;margin-bottom:4px">Examples:</span>
+        <span class="claims-example" data-topic="Illegal late fees">Illegal late fees</span>
+        <span class="claims-example" data-topic="Habitability issues">Habitability issues</span>
+        <span class="claims-example" data-topic="Rent increase validity">Rent increase validity</span>
+        <span class="claims-example" data-topic="Security deposit dispute">Security deposit dispute</span>
+      </div>
+      <div class="claims-add-row">
+        <input class="claims-add-input" id="claims-add-input" type="text" placeholder="Add a topic…" />
+        <button class="claims-add-btn" id="claims-add-btn" type="button">Add</button>
+      </div>`;
+    empty.style.display = '';
+
+    // Wire up example topic clicks
+    empty.querySelectorAll('.claims-example').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById('claims-add-input') as HTMLInputElement;
+        if (input) input.value = (btn as HTMLElement).dataset.topic ?? '';
+        input?.focus();
+      });
+    });
+
+    // Wire up add button
+    const addInput = document.getElementById('claims-add-input') as HTMLInputElement;
+    const addBtn = document.getElementById('claims-add-btn');
+    const doAdd = async () => {
+      const topic = addInput?.value.trim();
+      if (!topic) return;
+      const newClaim = {
+        id: crypto.randomUUID(),
+        title: topic,
+        description: '',
+        status: 'researching' as const,
+        confidence: 'low' as const,
+        relatedEvidenceIds: [],
+        relatedLegalNoteIds: [],
+        questions: []
+      };
+      const updated = await repo.loadCase(c.id);
+      if (!updated) return;
+      updated.claims = [...updated.claims, newClaim];
+      await repo.saveCase(updated);
+      currentCase = updated;
+      renderBriefClaims(updated);
+      showToast('Topic added');
+    };
+    addBtn?.addEventListener('click', doAdd);
+    addInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
     return;
   }
   empty.style.display = 'none';
@@ -396,6 +608,7 @@ function renderBriefTimeline(c: Case): void {
   if (timeline.length === 0) {
     container.innerHTML = '';
     empty.style.display = '';
+    empty.textContent = 'No dated items yet. Add dates to evidence to build a timeline.';
     return;
   }
   empty.style.display = 'none';
@@ -452,16 +665,57 @@ function renderKeyFacts(c: Case): void {
   container.querySelectorAll('.fact-row--link').forEach((btn) => {
     btn.addEventListener('click', () => {
       const evId = (btn as HTMLElement).dataset.evId!;
-      const details = document.getElementById('brief-sources-details') as HTMLDetailsElement;
-      if (details) details.open = true;
-      setTimeout(() => {
-        const row = document.querySelector(`[data-ev-id="${evId}"]`);
-        if (row) {
-          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          (row as HTMLElement).style.outline = '2px solid #4a90d9';
-          setTimeout(() => { (row as HTMLElement).style.outline = ''; }, 1500);
-        }
-      }, 100);
+      const ev = c.evidence.find((x) => x.id === evId);
+      if (!ev) return;
+
+      // Toggle drawer
+      const existing = document.getElementById('fact-source-drawer');
+      if (existing && existing.dataset.evId === evId) {
+        existing.remove();
+        return;
+      }
+      existing?.remove();
+
+      const date = isFinite(ev.dateTime.getTime())
+        ? ev.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'No date';
+      const bodyPreview = ev.body.slice(0, 400) + (ev.body.length > 400 ? '…' : '');
+      // Highlight the dollar amount in the preview
+      const highlighted = bodyPreview.replace(
+        /\$[\d,]+(\.\d{2})?/g,
+        (m) => `<mark style="background:#fff3b0;padding:0 1px">${m}</mark>`
+      );
+      const thumbHTML = ev.thumbnail
+        ? `<img src="${ev.thumbnail}" style="width:60px;height:60px;object-fit:cover;border:1px solid #ddd;margin-right:10px;flex-shrink:0" alt="" />`
+        : '';
+
+      const drawer = document.createElement('div');
+      drawer.id = 'fact-source-drawer';
+      drawer.dataset.evId = evId;
+      drawer.className = 'fact-source-drawer';
+      drawer.innerHTML = `
+        <div class="fsd-header">
+          <div style="display:flex;align-items:center">
+            ${thumbHTML}
+            <div>
+              <div style="font-size:12px;font-weight:500;color:#111">${esc(ev.title)}</div>
+              <div style="font-size:10px;color:#888;margin-top:2px">${esc(ev.category ?? '—')} · ${esc(date)}</div>
+            </div>
+          </div>
+          <button class="fsd-close" type="button">×</button>
+        </div>
+        <div class="fsd-body">${highlighted || '<em style="color:#bbb">No text extracted.</em>'}</div>
+        <div class="fsd-footer">
+          <button class="fsd-edit" data-ev-id="${esc(evId)}" type="button">Edit ✏</button>
+        </div>
+      `;
+
+      btn.after(drawer);
+      drawer.querySelector('.fsd-close')!.addEventListener('click', () => drawer.remove());
+      drawer.querySelector('.fsd-edit')!.addEventListener('click', () => {
+        showEvidenceEditForm(ev, c.id);
+        drawer.remove();
+      });
     });
   });
 }
@@ -475,21 +729,54 @@ function renderBriefGaps(c: Case, gaps: Gap[]): void {
     return;
   }
   empty.style.display = 'none';
-  list.innerHTML = gaps.map((g) => `
-    <div class="gap-row" data-gap-id="${esc(g.id)}">
+
+  const gapDetails: Record<string, { looks: string; found: string }> = {
+    'gap.missingLease': {
+      looks: 'A file categorized as "lease" or "amendment" — typically a PDF or DOCX with words like "lease", "rental agreement", or "tenant" in the filename or content.',
+      found: c.evidence.filter(e => e.category === 'lease' || e.category === 'amendment').length + ' lease/amendment item(s) found'
+    },
+    'gap.missingPaymentRecord': {
+      looks: 'A file categorized as "payment" — typically a PDF or CSV containing words like "payment", "rent paid", "balance", or "ledger".',
+      found: c.evidence.filter(e => e.category === 'payment').length + ' payment record(s) found'
+    },
+    'gap.missingRentIncreaseNotice': {
+      looks: 'A file categorized as "rent-notice" — typically a PDF with "rent increase" or "notice of rent" in the filename or content.',
+      found: c.evidence.filter(e => e.category === 'rent-notice').length + ' rent notice(s) found'
+    },
+    'gap.noConfirmedDates': {
+      looks: 'At least one evidence item with a confirmed date (from filename, OCR text, or EXIF data).',
+      found: c.evidence.filter(e => isFinite(e.dateTime.getTime())).length + ' item(s) with confirmed dates'
+    }
+  };
+
+  list.innerHTML = gaps.map((g) => {
+    const detail = gapDetails[g.id] ?? { looks: g.description, found: '' };
+    return `<div class="gap-row" data-gap-id="${esc(g.id)}">
       <span class="gap-row__icon">△</span>
       <div class="gap-row__body">
-        <strong>${esc(g.displayName)}</strong><br>
-        <span style="font-size:11px">${esc(g.description)}</span>
+        <strong>${esc(g.displayName)}</strong>
+        <div class="gap-row__expand" id="gap-detail-${esc(g.id)}" style="display:none">
+          <div class="gap-detail-looks"><span class="gap-detail-label">What we look for:</span> ${esc(detail.looks)}</div>
+          <div class="gap-detail-found"><span class="gap-detail-label">Current status:</span> ${esc(detail.found)}</div>
+        </div>
         <button class="gap-row__action" data-gap-id="${esc(g.id)}" type="button">Mark resolved</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+
+  // Expand on click
+  list.querySelectorAll('.gap-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).classList.contains('gap-row__action')) return;
+      const id = (row as HTMLElement).dataset.gapId!;
+      const detail = document.getElementById(`gap-detail-${id}`);
+      if (detail) detail.style.display = detail.style.display === 'none' ? '' : 'none';
+    });
+  });
 
   list.querySelectorAll('.gap-row__action').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      // In a real app we'd persist resolved status; for now just re-render
       const row = (btn as HTMLElement).closest('.gap-row') as HTMLElement;
       row.style.opacity = '0.4';
       (btn as HTMLElement).textContent = 'Resolved ✓';
@@ -529,7 +816,8 @@ function renderSourceFiles(c: Case): void {
   label.textContent = `${c.evidence.length} file${c.evidence.length !== 1 ? 's' : ''}`;
   const iconMap: Record<string, string> = {
     photo: '📷', lease: '📄', payment: '💳', 'rent-notice': '📬',
-    'fee-notice': '⚠', repair: '🔧', message: '💬', amendment: '📝', other: '📄'
+    'fee-notice': '⚠', repair: '🔧', message: '💬', amendment: '📝',
+    correspondence: '✉', other: '📄'
   };
   list.innerHTML = c.evidence.map((ev) => {
     const icon = iconMap[ev.category ?? 'other'] ?? '📄';
@@ -547,8 +835,12 @@ function renderSourceFiles(c: Case): void {
       ? `<img src="${ev.thumbnail}" class="ev-thumb" alt="" />`
       : `<span class="evidence-row__icon">${icon}</span>`;
     const sourcePathHTML = ev.sourceFile
-      ? `<div class="ev-source-path" data-tip="${esc(ev.sourceFile)}">${esc(ev.sourceFile)}</div>`
+      ? `<div style="display:flex;align-items:center;gap:4px">
+          <div class="ev-source-path">${esc(ev.sourceFile)}</div>
+          <button class="ev-copy-path" data-path="${esc(ev.sourceFile)}" type="button" data-tip="Copy file path" style="background:none;border:none;color:#bbb;cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0">⎘</button>
+        </div>`
       : '';
+    const autoExpand = (ev.category === 'other' || ev.category === 'correspondence');
     return `<div class="evidence-row-wrap" data-ev-id="${esc(ev.id)}">
       <div class="evidence-row" style="display:flex;align-items:center;gap:6px">
         ${thumbHTML}
@@ -558,13 +850,25 @@ function renderSourceFiles(c: Case): void {
         </div>
         <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
         <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
-        ${hasPreview ? `<button class="ocr-toggle" data-ev-id="${esc(ev.id)}" type="button" data-tip="Show OCR text">text ▸</button>` : ''}
+        ${hasPreview ? `<button class="ocr-toggle" data-ev-id="${esc(ev.id)}" type="button" data-tip="Show OCR text">text ${autoExpand ? '▾' : '▸'}</button>` : ''}
         <button class="ev-edit-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Edit" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0">✏</button>
         <button class="ev-delete-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Delete" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">×</button>
       </div>
-      ${hasPreview ? `<div class="ocr-preview" id="ocr-preview-${esc(ev.id)}">${esc(previewLines)}</div>` : ''}
+      ${hasPreview ? `<div class="ocr-preview${autoExpand ? ' visible' : ''}" id="ocr-preview-${esc(ev.id)}">${esc(previewLines)}</div>` : ''}
     </div>`;
   }).join('') || '<p class="lib-empty">No source files.</p>';
+
+  list.querySelectorAll('.ev-copy-path').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const path = (btn as HTMLElement).dataset.path ?? '';
+      navigator.clipboard.writeText(path).then(() => {
+        showToast('Path copied');
+      }).catch(() => {
+        showToast('Copy failed');
+      });
+    });
+  });
 
   list.querySelectorAll('.ocr-toggle').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -593,6 +897,7 @@ function renderSourceFiles(c: Case): void {
       const ev = c.evidence.find((x) => x.id === evId);
       if (!await showConfirm(`Delete "${ev?.title ?? 'this item'}"?`, 'This evidence item will be permanently removed from the case.')) return;
       await repo.deleteEvidence(c.id, evId);
+      showToast('Item deleted');
       await openCase(c.id);
     });
   });
@@ -609,11 +914,17 @@ function renderNeedsReview(c: Case): void {
 
   if (reviewItems.length === 0) {
     section.style.display = 'none';
+    // Update review filter button to show 0
+    const reviewBtn = document.querySelector('[data-filter="review"]') as HTMLElement | null;
+    if (reviewBtn) reviewBtn.textContent = '⚠ Review';
     return;
   }
 
   section.style.display = '';
   badge.textContent = String(reviewItems.length);
+  // Update filter button with count
+  const reviewBtn = document.querySelector('[data-filter="review"]') as HTMLElement | null;
+  if (reviewBtn) reviewBtn.textContent = `⚠ Review (${reviewItems.length})`;
 
   list.innerHTML = reviewItems.map((ev) => {
     const reason = ev.body.trim().length < 10
@@ -621,14 +932,42 @@ function renderNeedsReview(c: Case): void {
       : ev.body.trim().length < 50
       ? 'Too little text to classify'
       : 'Could not identify document type';
-    return `<div class="review-row" data-ev-id="${esc(ev.id)}">
-      <span class="review-row__label" title="${esc(ev.title)}">${esc(ev.title)}</span>
-      <span class="review-row__reason">${esc(reason)}</span>
-      <button class="review-row__edit" data-ev-id="${esc(ev.id)}" type="button">Edit ✏</button>
+    const thumbHTML = ev.thumbnail
+      ? `<img src="${ev.thumbnail}" class="ev-thumb" alt="" style="margin-bottom:8px" />`
+      : '';
+    const ocrPreview = ev.body.trim().length > 0
+      ? `<div class="review-ocr-preview">${esc(ev.body.slice(0, 200))}${ev.body.length > 200 ? '…' : ''}</div>`
+      : '<div class="review-ocr-preview" style="color:#bbb;font-style:italic">No text extracted from this file.</div>';
+    const pathHTML = ev.sourceFile
+      ? `<div class="ev-source-path" style="margin-bottom:8px">${esc(ev.sourceFile)}</div>`
+      : '';
+    return `<div class="review-item" data-ev-id="${esc(ev.id)}">
+      <div class="review-item__header">
+        <span class="review-item__label">${esc(ev.title)}</span>
+        <span class="review-item__reason">${esc(reason)}</span>
+        <button class="review-item__toggle" data-ev-id="${esc(ev.id)}" type="button">▸</button>
+      </div>
+      <div class="review-item__body" id="review-body-${esc(ev.id)}" style="display:none">
+        ${pathHTML}
+        ${thumbHTML}
+        ${ocrPreview}
+        <button class="review-item__edit" data-ev-id="${esc(ev.id)}" type="button">Edit ✏</button>
+      </div>
     </div>`;
   }).join('');
 
-  list.querySelectorAll('.review-row__edit').forEach((btn) => {
+  list.querySelectorAll('.review-item__toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const body = document.getElementById(`review-body-${evId}`);
+      if (!body) return;
+      const isOpen = body.style.display !== 'none';
+      body.style.display = isOpen ? 'none' : '';
+      (btn as HTMLElement).textContent = isOpen ? '▸' : '▾';
+    });
+  });
+
+  list.querySelectorAll('.review-item__edit').forEach((btn) => {
     btn.addEventListener('click', () => {
       const evId = (btn as HTMLElement).dataset.evId!;
       const ev = c.evidence.find((x) => x.id === evId);
@@ -639,36 +978,55 @@ function renderNeedsReview(c: Case): void {
 
 function showEvidenceEditForm(ev: Evidence, caseId: string): void {
   document.getElementById('ev-edit-overlay')?.remove();
-  const cats: EvidenceCategory[] = ['lease', 'payment', 'rent-notice', 'fee-notice', 'repair', 'photo', 'message', 'amendment', 'other'];
+  const cats: EvidenceCategory[] = ['lease', 'payment', 'rent-notice', 'fee-notice', 'repair', 'photo', 'message', 'amendment', 'correspondence', 'other'];
   const dateVal = isFinite(ev.dateTime.getTime()) ? ev.dateTime.toISOString().slice(0, 10) : '';
   const catOptions = cats.map((cat) => `<option value="${cat}"${ev.category === cat ? ' selected' : ''}>${cat}</option>`).join('');
-  const field = (label: string, el: string) =>
-    `<label style="display:block;margin-bottom:4px;font-size:11px;color:#888;letter-spacing:.05em">${label}</label>${el}<div style="height:12px"></div>`;
 
   const overlay = document.createElement('div');
   overlay.id = 'ev-edit-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
   const thumbSection = ev.thumbnail
-    ? `<div style="margin-bottom:16px;text-align:center">
-        <img src="${ev.thumbnail}" style="max-width:100%;max-height:180px;border-radius:6px;border:1px solid #333;object-fit:contain" alt="Preview" />
-        ${ev.sourceFile ? `<div style="font-size:10px;color:#666;margin-top:4px;word-break:break-all">${esc(ev.sourceFile)}</div>` : ''}
+    ? `<div style="text-align:center;padding:12px 18px;border-bottom:1px solid #2a2a2a">
+        <img src="${ev.thumbnail}" style="max-width:100%;max-height:140px;border:1px solid #333;object-fit:contain" alt="Preview" />
+        ${ev.sourceFile ? `<div style="font-size:10px;color:#555;margin-top:4px;word-break:break-all">${esc(ev.sourceFile)}</div>` : ''}
       </div>`
     : ev.sourceFile
-      ? `<div style="font-size:10px;color:#666;margin-bottom:12px;word-break:break-all">📂 ${esc(ev.sourceFile)}</div>`
+      ? `<div style="font-size:10px;color:#555;padding:8px 18px;border-bottom:1px solid #2a2a2a;word-break:break-all">📂 ${esc(ev.sourceFile)}</div>`
       : '';
-  overlay.innerHTML = `<div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <strong style="color:#e8e8e8;font-size:14px">Edit Evidence</strong>
-      <button id="ev-edit-close" type="button" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1">×</button>
+  overlay.innerHTML = `<div style="background:#1a1a1a;border:1px solid #2a2a2a;padding:0;width:100%;max-width:500px;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #2a2a2a;flex-shrink:0">
+      <strong style="color:#e8e8e8;font-size:13px;letter-spacing:0.05em">EDIT EVIDENCE</strong>
+      <button id="ev-edit-close" type="button" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;line-height:1;padding:0">×</button>
     </div>
     ${thumbSection}
-    ${field('TITLE', `<input id="ev-edit-title" type="text" value="${esc(ev.title)}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
-    ${field('CATEGORY', `<select id="ev-edit-category" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">${catOptions}</select>`)}
-    ${field('DATE', `<input id="ev-edit-date" type="date" value="${dateVal}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
-    ${field('NOTES / OCR TEXT', `<textarea id="ev-edit-body" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:12px;height:100px;resize:vertical">${esc(ev.body)}</textarea>`)}
-    <div style="display:flex;gap:8px">
-      <button id="ev-edit-save" type="button" style="flex:1;background:#4a90d9;border:none;color:#fff;padding:10px;border-radius:4px;cursor:pointer;font-size:14px">Save</button>
-      <button id="ev-edit-cancel" type="button" style="flex:1;background:#2a2a2a;border:1px solid #444;color:#ccc;padding:10px;border-radius:4px;cursor:pointer;font-size:14px">Cancel</button>
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="grid-column:1/-1">
+          <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#666;margin-bottom:5px">Title</div>
+          <input id="ev-edit-title" type="text" value="${esc(ev.title)}" style="width:100%;background:#111;border:1px solid #2a2a2a;color:#e8e8e8;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box" />
+        </div>
+        <div>
+          <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#666;margin-bottom:5px">Category</div>
+          <select id="ev-edit-category" style="width:100%;background:#111;border:1px solid #2a2a2a;color:#e8e8e8;padding:8px 10px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box">${catOptions}</select>
+        </div>
+        <div>
+          <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#666;margin-bottom:5px">Date</div>
+          <input id="ev-edit-date" type="date" value="${dateVal}" style="width:100%;background:#111;border:1px solid #2a2a2a;color:#e8e8e8;padding:8px 10px;font-size:12px;font-family:inherit;outline:none;box-sizing:border-box" />
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:#666;margin-bottom:5px">Extracted / OCR Text <span style="font-size:9px;color:#444;font-weight:normal;letter-spacing:0">(edit to correct OCR errors)</span></div>
+        <textarea id="ev-edit-body" style="width:100%;background:#111;border:1px solid #2a2a2a;color:#ccc;padding:8px 10px;font-size:11px;height:120px;resize:vertical;font-family:monospace;line-height:1.5;outline:none;box-sizing:border-box">${esc(ev.body)}</textarea>
+        <div style="margin-top:4px;display:flex;gap:6px;align-items:center">
+          <button id="ev-range-copy-btn" type="button" style="background:none;border:1px solid #333;color:#888;font-size:10px;padding:3px 8px;cursor:pointer;font-family:inherit;letter-spacing:0.06em">⎘ Range Copy</button>
+          <span id="ev-range-hint" style="font-size:10px;color:#444"></span>
+        </div>
+        <div id="ev-sentence-view" style="display:none;margin-top:6px"></div>
+      </div>
+      <div style="display:flex;gap:8px;padding-top:4px;border-top:1px solid #2a2a2a">
+        <button id="ev-edit-save" type="button" style="flex:1;background:#fff;border:none;color:#111;padding:10px;cursor:pointer;font-size:13px;font-family:inherit;letter-spacing:0.05em">Save</button>
+        <button id="ev-edit-cancel" type="button" style="flex:1;background:#111;border:1px solid #2a2a2a;color:#888;padding:10px;cursor:pointer;font-size:13px;font-family:inherit">Cancel</button>
+      </div>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -677,6 +1035,60 @@ function showEvidenceEditForm(ev: Evidence, caseId: string): void {
   document.getElementById('ev-edit-close')!.onclick = close;
   document.getElementById('ev-edit-cancel')!.onclick = close;
   overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+  // Range copy
+  let _rangeStart: number | null = null;
+  let _rangeEnd: number | null = null;
+
+  const rangeCopyBtn = document.getElementById('ev-range-copy-btn')!;
+  const sentenceView = document.getElementById('ev-sentence-view')!;
+  const rangeHint = document.getElementById('ev-range-hint')!;
+
+  rangeCopyBtn.addEventListener('click', () => {
+    const active = sentenceView.style.display !== 'none';
+    if (active) {
+      sentenceView.style.display = 'none';
+      rangeCopyBtn.textContent = '⎘ Range Copy';
+      rangeHint.textContent = '';
+      _rangeStart = null; _rangeEnd = null;
+      return;
+    }
+    const bodyText = (document.getElementById('ev-edit-body') as HTMLTextAreaElement).value;
+    const sentences = bodyText.match(/[^.!?\n]+[.!?\n]?/g) ?? [bodyText];
+    sentenceView.style.display = '';
+    rangeCopyBtn.textContent = '✕ Exit Range Mode';
+    rangeHint.textContent = 'Click start sentence, then end sentence';
+    _rangeStart = null; _rangeEnd = null;
+
+    sentenceView.innerHTML = sentences.map((s, i) =>
+      `<span class="sent-unit" data-idx="${i}" style="cursor:pointer;display:inline;border-radius:2px;padding:0 1px">${esc(s)}</span>`
+    ).join('');
+
+    sentenceView.querySelectorAll('.sent-unit').forEach((span) => {
+      span.addEventListener('click', () => {
+        const idx = parseInt((span as HTMLElement).dataset.idx ?? '0', 10);
+        if (_rangeStart === null) {
+          _rangeStart = idx;
+          rangeHint.textContent = 'Now click the end sentence';
+          sentenceView.querySelectorAll('.sent-unit').forEach((s, i) => {
+            (s as HTMLElement).style.background = i === idx ? '#fff3b0' : '';
+          });
+        } else {
+          _rangeEnd = idx;
+          const start = Math.min(_rangeStart, _rangeEnd);
+          const end = Math.max(_rangeStart, _rangeEnd);
+          const selected = sentences.slice(start, end + 1).join('');
+          navigator.clipboard.writeText(selected).then(() => {
+            rangeHint.textContent = `Copied ${end - start + 1} sentence${end - start !== 0 ? 's' : ''}`;
+            sentenceView.querySelectorAll('.sent-unit').forEach((s, i) => {
+              (s as HTMLElement).style.background = (i >= start && i <= end) ? '#d4f0c0' : '';
+            });
+            _rangeStart = null; _rangeEnd = null;
+          });
+        }
+      });
+    });
+  });
 
   document.getElementById('ev-edit-save')!.onclick = async () => {
     const updated: Evidence = {
@@ -689,6 +1101,7 @@ function showEvidenceEditForm(ev: Evidence, caseId: string): void {
       body: (document.getElementById('ev-edit-body') as HTMLTextAreaElement).value,
     };
     await repo.saveEvidence(caseId, [updated]);
+    showToast('Saved');
     close();
     await openCase(caseId);
   };
@@ -1044,6 +1457,9 @@ function renderConsultSlides(c: Case): void {
 async function exportCurrentCase(variant: 'fullCase' | 'lawyerSummary'): Promise<void> {
   if (!currentCase) return;
   try {
+    const pref = localStorage.getItem(EXPORT_PREF_KEY) ?? 'markdown';
+
+    // Always generate markdown
     const result = await exportCaseMarkdown({
       repo,
       caseData: currentCase,
@@ -1051,17 +1467,105 @@ async function exportCurrentCase(variant: 'fullCase' | 'lawyerSummary'): Promise
       exportedAt: new Date(),
       appVersion: '2.0.0',
     });
-    const blob = new Blob([result.markdown], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentCase.title.replace(/[^a-z0-9]/gi, '_')}_${variant}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
     currentCase = result.case;
+
+    if (pref === 'zip' || pref === 'both') {
+      const gaps = detectGaps(currentCase);
+      const timeline = buildTimeline(currentCase.evidence, currentCase.messages);
+      const facts = extractKeyFacts(currentCase.evidence);
+
+      const htmlReport = buildHtmlReport(currentCase, result.markdown, gaps, timeline, facts);
+      const htmlBlob = new Blob([htmlReport], { type: 'text/html' });
+      const htmlUrl = URL.createObjectURL(htmlBlob);
+      const a2 = document.createElement('a');
+      a2.href = htmlUrl;
+      a2.download = `${currentCase.title.replace(/[^a-z0-9]/gi, '_')}_report.html`;
+      a2.click();
+      URL.revokeObjectURL(htmlUrl);
+    }
+
+    if (pref === 'markdown' || pref === 'both') {
+      const blob = new Blob([result.markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentCase.title.replace(/[^a-z0-9]/gi, '_')}_${variant}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Also offer JSON raw data download
+    const jsonBlob = new Blob([JSON.stringify(currentCase, null, 2)], { type: 'application/json' });
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+    const aj = document.createElement('a');
+    aj.href = jsonUrl;
+    aj.download = `${currentCase.title.replace(/[^a-z0-9]/gi, '_')}_data.json`;
+    aj.click();
+    URL.revokeObjectURL(jsonUrl);
+
+    showToast('Exported');
   } catch (err) {
     alert(`Export failed: ${err}`);
   }
+}
+
+function buildHtmlReport(c: Case, markdown: string, gaps: Gap[], timeline: TimelineItem[], facts: ReturnType<typeof extractKeyFacts>): string {
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timelineRows = timeline.slice(0, 30).map(item => {
+    const d = isFinite(item.dateTime.getTime())
+      ? item.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—';
+    const title = item.kind === 'evidence' ? item.title : `Message: ${item.body.slice(0, 80)}`;
+    return `<tr><td style="color:#888;font-size:11px;white-space:nowrap;padding:4px 8px 4px 0">${esc(d)}</td><td style="padding:4px 0">${esc(title)}</td><td style="font-size:10px;color:#888;padding:4px 0 4px 8px">${esc(item.kind === 'evidence' ? (item.category ?? '—') : 'message')}</td></tr>`;
+  }).join('');
+  const gapRows = gaps.map(g => `<li style="margin-bottom:6px;color:#b85c00"><strong>${esc(g.displayName)}</strong> — ${esc(g.description)}</li>`).join('');
+  const factRows = facts.map(f => `<li style="margin-bottom:4px">${esc(f.raw)} <span style="color:#888;font-size:11px">— ${esc(f.evidenceTitle)}</span></li>`).join('');
+  const evRows = c.evidence.map(ev => {
+    const d = isFinite(ev.dateTime.getTime()) ? ev.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+    return `<tr><td style="padding:5px 8px 5px 0;font-size:12px">${esc(ev.title)}</td><td style="font-size:11px;color:#888;padding:5px 8px">${esc(ev.category ?? '—')}</td><td style="font-size:11px;color:#888;padding:5px 0">${esc(d)}</td></tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>${esc(c.title)} — Case Report</title>
+<style>
+body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 20px;color:#111;font-size:14px;line-height:1.65}
+h1{font-size:22px;font-weight:400;border-bottom:2px solid #111;padding-bottom:8px;margin-bottom:4px}
+h2{font-size:14px;letter-spacing:0.12em;text-transform:uppercase;color:#888;margin:28px 0 8px;border-bottom:1px solid #eee;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+.meta{font-size:12px;color:#888;margin-bottom:24px}
+.gap-list{list-style:disc;padding-left:20px}
+.fact-list{list-style:disc;padding-left:20px;font-size:13px}
+@media print{body{margin:20px}}
+</style>
+</head>
+<body>
+<h1>${esc(c.title)}</h1>
+<div class="meta">Generated ${esc(date)} · ${c.evidence.length} evidence items · ${gaps.length} gap${gaps.length !== 1 ? 's' : ''}</div>
+${c.clientGoal ? `<p><strong>Client goal:</strong> ${esc(c.clientGoal)}</p>` : ''}
+${c.property?.address ? `<p><strong>Property:</strong> ${esc(c.property.address)}${c.property.unit ? ', ' + esc(c.property.unit) : ''}</p>` : ''}
+${c.parties ? `<p><strong>Parties:</strong> Tenant: ${esc(c.parties.tenant || '—')} · Landlord: ${esc(c.parties.landlord || '—')}</p>` : ''}
+
+<h2>Timeline</h2>
+${timeline.length === 0 ? '<p style="color:#bbb">No dated items.</p>' : `<table>${timelineRows}</table>`}
+
+<h2>Key Facts</h2>
+${facts.length === 0 ? '<p style="color:#bbb">No key facts extracted.</p>' : `<ul class="fact-list">${factRows}</ul>`}
+
+<h2>Gaps</h2>
+${gaps.length === 0 ? '<p style="color:#1a7a3a">No gaps detected.</p>' : `<ul class="gap-list">${gapRows}</ul>`}
+
+<h2>Evidence (${c.evidence.length} items)</h2>
+<table><thead><tr><th style="text-align:left;padding:5px 8px 5px 0;border-bottom:1px solid #eee">Title</th><th style="text-align:left;padding:5px 8px;border-bottom:1px solid #eee">Category</th><th style="text-align:left;padding:5px 0;border-bottom:1px solid #eee">Date</th></tr></thead><tbody>${evRows}</tbody></table>
+
+${c.messages.length > 0 ? `<h2>Messages (${c.messages.length})</h2><p style="color:#888;font-size:12px">Message export available in full data JSON.</p>` : ''}
+
+<h2>Discussion Topics</h2>
+${c.claims.length === 0 ? '<p style="color:#bbb">None yet.</p>' : c.claims.map(cl => `<p><strong>${esc(cl.title)}</strong>${cl.description ? ` — ${esc(cl.description)}` : ''}</p>`).join('')}
+</body>
+</html>`;
 }
 
 // ── Library screen ─────────────────────────────────────────────────────────────
@@ -1160,6 +1664,54 @@ function showConfirm(message: string, detail: string, confirmLabel = 'Delete', d
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+
+  // ── JS Tooltip (replaces broken CSS ::after approach) ─────────────────
+  const _tip = document.createElement('div');
+  _tip.id = 'js-tip';
+  _tip.style.cssText = 'position:fixed;background:#1a1a1a;color:#e8e8e8;font-size:11px;padding:4px 8px;border:1px solid #333;border-radius:3px;pointer-events:none;opacity:0;transition:opacity 0.12s;z-index:9999;white-space:nowrap;max-width:260px;word-break:break-all;white-space:normal';
+  document.body.appendChild(_tip);
+
+  document.addEventListener('mouseover', (e) => {
+    const el = (e.target as HTMLElement).closest('[data-tip]') as HTMLElement | null;
+    // Also reveal truncated text elements
+    const truncEl = (e.target as HTMLElement).closest('.detail-title, .evidence-row__name, .ev-source-path, .review-item__label, .case-row__name') as HTMLElement | null;
+    const target = el ?? (truncEl && truncEl.scrollWidth > truncEl.clientWidth ? truncEl : null);
+    if (!target) return;
+    const tipText = el?.dataset.tip ?? target.textContent?.trim() ?? '';
+    if (!tipText) return;
+    _tip.textContent = tipText;
+    _tip.style.opacity = '1';
+    const rect = target.getBoundingClientRect();
+    const tipW = _tip.offsetWidth || 120;
+    let left = rect.left + rect.width / 2 - tipW / 2;
+    left = Math.max(6, Math.min(left, window.innerWidth - tipW - 6));
+    const top = rect.top - _tip.offsetHeight - 8;
+    _tip.style.left = left + 'px';
+    _tip.style.top = (top < 6 ? rect.bottom + 8 : top) + 'px';
+  });
+  document.addEventListener('mouseout', (e) => {
+    const el = (e.target as HTMLElement).closest('[data-tip]');
+    const truncEl = (e.target as HTMLElement).closest('.detail-title, .evidence-row__name, .ev-source-path, .review-item__label, .case-row__name');
+    if (!el && !truncEl) return;
+    _tip.style.opacity = '0';
+  });
+  document.addEventListener('scroll', () => { _tip.style.opacity = '0'; }, true);
+
+  // ── Canvas filter buttons
+  document.querySelectorAll('.cf-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      showCanvasFilter((btn as HTMLElement).dataset.filter ?? 'all');
+    });
+  });
+
+  // ── Topbar add button
+  document.getElementById('topbar-add-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('intake-panel')!;
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
 
   // ── Dock navigation
   document.querySelectorAll('.dock__item').forEach((btn) => {
@@ -1269,9 +1821,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('consult-exit-btn')!.addEventListener('click', closeConsult);
   document.getElementById('consult-prev-btn')!.addEventListener('click', prevSlide);
   document.getElementById('consult-next-btn')!.addEventListener('click', nextSlide);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeConsult();
-  });
 
   document.querySelectorAll('.nav-dot').forEach((dot, i) => {
     dot.addEventListener('click', () => {
@@ -1318,8 +1867,39 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.reload();
   });
 
+  // ── Keyboard navigation between canvas filters
+  document.addEventListener('keydown', (e) => {
+    // Already handles Escape for consult
+    if (e.key === 'Escape') closeConsult();
+
+    // Arrow key filter navigation when on brief screen
+    const briefActive = document.getElementById('screen-brief')?.classList.contains('active');
+    if (!briefActive) return;
+    if (['ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      const focusedTag = (document.activeElement as HTMLElement)?.tagName;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(focusedTag ?? '')) return;
+      const filters = ['all', 'timeline', 'review', 'sources', 'gaps'];
+      const activeBtn = document.querySelector('.cf-btn.active') as HTMLElement | null;
+      const currentFilter = activeBtn?.dataset.filter ?? 'all';
+      const idx = filters.indexOf(currentFilter);
+      const nextIdx = e.key === 'ArrowRight'
+        ? Math.min(filters.length - 1, idx + 1)
+        : Math.max(0, idx - 1);
+      showCanvasFilter(filters[nextIdx]);
+    }
+  });
+
   // ── Initial load
-  loadHome().then(() => {
+  loadHome().then(async () => {
     showScreen('screen-home');
+    // Resumability: restore last case if available
+    const lastCaseId = sessionStorage.getItem('last.caseId');
+    if (lastCaseId) {
+      const lastCase = allCases.find(c => c.id === lastCaseId);
+      if (lastCase) {
+        await openCase(lastCaseId);
+        showResumeBadge();
+      }
+    }
   });
 });

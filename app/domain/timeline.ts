@@ -4,7 +4,9 @@ export function buildTimeline(evidence: Evidence[], messages: Message[]): Timeli
   return [
     ...evidence.map((item) => ({ ...item, kind: 'evidence' as const })),
     ...messages.map((item) => ({ ...item, kind: 'message' as const }))
-  ].sort((a, b) => {
+  ]
+  .filter((item) => isFinite(item.dateTime.getTime()))
+  .sort((a, b) => {
     const diff = a.dateTime.getTime() - b.dateTime.getTime();
     if (diff !== 0) return diff;
     return a.id.localeCompare(b.id);
