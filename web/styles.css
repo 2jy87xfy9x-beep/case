@@ -15,6 +15,7 @@ body {
   display: flex;
   flex-direction: column;
   user-select: none;
+  padding-bottom: 52px;
 }
 
 /* ── Screens ───────────────────────────────────────────────────────────── */
@@ -84,39 +85,105 @@ body {
 
 /* ── Case list & rows ──────────────────────────────────────────────────── */
 
-.case-list { display: flex; flex-direction: column; gap: 2px; }
+.case-list { display: flex; flex-direction: column; }
 
+/* Flat expandable case row */
 .case-row {
+  border-bottom: 1px solid #ebebeb;
   background: #fff;
-  border: 1px solid #e8e8e8;
-  padding: 12px 14px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   transition: background 0.1s;
 }
-.case-row:hover { background: #fafafa; border-color: #ccc; }
+.case-row:hover { background: #fafafa; }
+.case-row:last-child { border-bottom: none; }
 
-.case-row__icon { font-size: 14px; width: 20px; flex-shrink: 0; color: #555; }
+.case-row__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.case-row__expand-icon {
+  font-size: 11px;
+  color: #bbb;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  width: 14px;
+}
+.case-row.expanded .case-row__expand-icon { transform: rotate(90deg); }
+
 .case-row__body { flex: 1; min-width: 0; }
 .case-row__name { font-size: 13px; color: #111; font-weight: 500; }
-.case-row__meta { font-size: 11px; color: #999; margin-top: 2px; }
+.case-row__meta { font-size: 11px; color: #999; margin-top: 1px; }
 
-.case-row__status {
-  font-size: 10px;
+.case-row__gaps-badge {
+  font-size: 9px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 2px 7px;
-  border: 1px solid currentColor;
+  padding: 2px 6px;
   flex-shrink: 0;
+  border: 1px solid currentColor;
 }
 .status--ready { color: #1a7a3a; }
 .status--gaps  { color: #b85c00; }
 .status--lib   { color: #888; }
 .status--processing { color: #666; }
 
-.case-row__arrow { color: #bbb; font-size: 12px; flex-shrink: 0; }
+/* Inline expand panel */
+.case-row__panel {
+  display: none;
+  padding: 0 14px 12px 38px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
+}
+.case-row.expanded .case-row__panel { display: block; }
+
+.case-row__summary {
+  font-size: 11px;
+  color: #777;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.case-row__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.case-row__action-btn {
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  border: 1px solid #ddd;
+  color: #555;
+  padding: 4px 10px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.case-row__action-btn:hover { border-color: #888; color: #111; }
+.case-row__action-btn--open {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.case-row__action-btn--open:hover { background: #333; }
+.case-row__action-btn--delete { color: #b00; border-color: #dcc; }
+.case-row__action-btn--delete:hover { border-color: #b00; }
+
+/* Multiselect mode */
+.case-row--selectable .case-row__header { padding-left: 8px; }
+.case-row.selected { background: #f0f4ff; }
+.case-row--safe-delete { background: #fff0f0 !important; }
+
+/* Home canvas drop zone */
+.home-canvas.drag-over {
+  outline: 2px dashed #888;
+  outline-offset: -4px;
+  background: #f8f8f8;
+}
 
 /* ── Intake toggle & panel ─────────────────────────────────────────────── */
 
@@ -163,32 +230,93 @@ body {
 .intake-option__label { font-weight: 500; font-size: 11px; }
 .intake-option__desc { font-size: 10px; color: #999; letter-spacing: 0.02em; }
 
-/* ── Bottom dock ───────────────────────────────────────────────────────── */
+/* ── Bottom dock (global fixed) ─────────────────────────────────────── */
 
 .dock {
-  border-top: 1px solid #ddd;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #e8e8e8;
   background: #fff;
+  height: 52px;
   display: flex;
-  justify-content: space-around;
-  padding: 8px 0 12px;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+  z-index: 400;
+}
+.dock__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dock__sep {
+  width: 1px;
+  height: 24px;
+  background: #e8e8e8;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+.dock__tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dock__spacer { flex: 1; }
+.dock__upload-wrap {
+  position: relative;
   flex-shrink: 0;
 }
 .dock__item {
+  width: 36px;
+  height: 36px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
   cursor: pointer;
-  padding: 4px 12px;
   color: #999;
-  transition: color 0.1s;
+  transition: color 0.1s, background 0.1s;
   background: none;
   border: none;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 15px;
+  border-radius: 6px;
+  padding: 0;
+  flex-shrink: 0;
 }
 .dock__item.active { color: #111; }
-.dock__item:hover { color: #444; }
+.dock__item:hover { color: #444; background: #f5f5f5; }
+.dock__item--upload { background: #111; color: #fff !important; border-radius: 6px; }
+.dock__item--upload:hover { background: #333 !important; }
+
+/* Dock upload menu popup */
+.dock-upload-menu {
+  position: absolute;
+  bottom: 44px;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  min-width: 130px;
+  z-index: 500;
+}
+.dock-upload-menu__item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  color: #222;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.03em;
+}
+.dock-upload-menu__item:last-child { border-bottom: none; }
+.dock-upload-menu__item:hover { background: #f5f5f5; }
 
 /* ── Detail topbar ─────────────────────────────────────────────────────── */
 
@@ -390,7 +518,18 @@ body {
 .lib-surface__reason { font-size: 10px; color: #b85c00; margin-top: 2px; }
 .lib-surface__cta { font-size: 10px; color: #aaa; flex-shrink: 0; }
 
-/* ── Export bar ────────────────────────────────────────────────────────── */
+/* ── Brief statusbar (replaces export bar) ─────────────────────────── */
+
+.brief-statusbar {
+  padding: 8px 16px;
+  border-top: 1px solid #eee;
+  background: #fff;
+  font-size: 11px;
+  color: #aaa;
+  flex-shrink: 0;
+}
+
+/* ── Export bar (kept for legacy CSS refs; hidden) ─────────────────── */
 
 .export-bar {
   padding: 10px 16px;
@@ -1545,3 +1684,263 @@ a:focus-visible {
   cursor: pointer;
 }
 .template-modal__cancel:hover { border-color: #999; color: #555; }
+
+/* ── Stub info button (Task 3) ───────────────────────────────────────── */
+.stub-info {
+  background: none;
+  border: 1px solid #ccc;
+  color: #888;
+  font-size: 9px;
+  padding: 0 4px;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+.stub-info:hover { border-color: #888; color: #444; }
+
+/* ── Feature toggles (Task 5) ────────────────────────────────────────── */
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+.feature-toggle:last-child { border-bottom: none; }
+.feature-toggle__info { flex: 1; }
+.feature-toggle__label { display: block; font-size: 12px; color: #222; }
+.feature-toggle__desc { display: block; font-size: 10px; color: #aaa; margin-top: 2px; }
+.feature-toggle__switch {
+  width: 36px;
+  height: 20px;
+  background: #ddd;
+  border-radius: 10px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.feature-toggle__switch::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.feature-toggle input:checked ~ .feature-toggle__switch { background: #111; }
+.feature-toggle input:checked ~ .feature-toggle__switch::after { transform: translateX(16px); }
+
+/* ── Sync folder rows (Task 6) ───────────────────────────────────────── */
+.sync-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  margin-bottom: 6px;
+}
+.sync-folder-row__icon { color: #888; flex-shrink: 0; }
+.sync-folder-row__body { flex: 1; }
+.sync-folder-row__name { font-size: 12px; color: #222; }
+.sync-folder-row__meta { font-size: 10px; color: #aaa; margin-top: 2px; }
+.sync-reconnect-btn {
+  background: none;
+  border: none;
+  color: #4a90d9;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  font-family: inherit;
+}
+.sync-remove-btn {
+  background: none;
+  border: none;
+  color: #bbb;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 6px;
+}
+.sync-remove-btn:hover { color: #555; }
+
+/* ── Promote to library button (Task 4) ──────────────────────────────── */
+.ev-promote-btn {
+  background: none;
+  border: 1px solid #ddd;
+  color: #888;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.ev-promote-btn:hover { border-color: #888; color: #333; }
+
+/* ── Library link item (Task 4) ──────────────────────────────────────── */
+.lib-item--link { cursor: pointer; }
+.lib-item--link:hover { background: #f5f5f5; }
+.lib-item__delete {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.lib-item__delete:hover { color: #b00; }
+
+/* ── Snapshot modal (Task 4) ─────────────────────────────────────────── */
+.snapshot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.snapshot-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+.snapshot-modal__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+  margin-bottom: 4px;
+}
+.snapshot-modal__url {
+  font-size: 10px;
+  color: #4a90d9;
+  margin-bottom: 10px;
+  word-break: break-all;
+}
+.snapshot-modal__banner {
+  background: #fff8e0;
+  border: 1px solid #f0d880;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #886600;
+  margin-bottom: 12px;
+}
+.snapshot-modal__content {
+  font-family: monospace;
+  font-size: 11px;
+  color: #444;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f9f9f9;
+  border: 1px solid #eee;
+  padding: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.snapshot-modal__close {
+  margin-top: 12px;
+  font-family: inherit;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.snapshot-modal__close:hover { background: #333; }
+
+/* ── Add link modal (Task 4) ─────────────────────────────────────────── */
+.add-link-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.add-link-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  padding: 20px;
+}
+.add-link-modal__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+  margin-bottom: 14px;
+}
+.add-link-modal__field {
+  margin-bottom: 10px;
+}
+.add-link-modal__label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 4px;
+}
+.add-link-modal__input,
+.add-link-modal__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  outline: none;
+  background: #fff;
+  color: #111;
+}
+.add-link-modal__input:focus,
+.add-link-modal__textarea:focus { border-color: #888; }
+.add-link-modal__actions { display: flex; gap: 8px; margin-top: 14px; }
+.add-link-modal__save {
+  font-family: inherit;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.add-link-modal__save:hover { background: #333; }
+.add-link-modal__cancel {
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  color: #888;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.add-link-modal__cancel:hover { border-color: #999; color: #555; }
+
+/* ── Topbar add button (kept for backward compat) ───────────────────── */
+.topbar__add-btn {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.topbar__add-btn:hover { background: #333; }

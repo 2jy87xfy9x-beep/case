@@ -18,63 +18,21 @@
     ══════════════════════════════════════ -->
     <div id="screen-home" class="screen active">
       <div class="topbar">
-        <span class="topbar__title">Cases</span>
-        <div style="display:flex;align-items:center;gap:10px">
-          <button class="topbar__add-btn" id="topbar-add-btn" type="button">↑ Add files</button>
-          <span class="topbar__sync">
-            <span class="sync-dot"></span>
-            saved locally
-          </span>
-        </div>
+        <span class="topbar__title">CASES</span>
+        <span class="topbar__sync">
+          <span class="sync-dot"></span>
+          saved locally
+        </span>
       </div>
 
-      <div class="canvas">
+      <div class="canvas home-canvas" id="home-canvas">
         <div class="section-label">Active</div>
         <div class="case-list" id="case-list">
           <!-- Rendered by JS -->
         </div>
-        <p id="case-list-empty" class="empty-state" style="display:none">No cases yet. Add files below to get started.</p>
+        <p id="case-list-empty" class="empty-state" style="display:none">No cases yet. Drop files here or use the upload button below.</p>
 
-        <div class="intake-toggle" id="intake-toggle">+ add files &nbsp;·&nbsp; tap to see all options</div>
-        <div class="intake-panel" id="intake-panel">
-          <div class="intake-grid">
-            <button class="intake-option intake-option--disabled" title="Coming soon — Connect Google Drive or Dropbox" type="button">
-              <span class="intake-option__icon">⟳</span>
-              <span class="intake-option__label">Sync Folder</span>
-              <span class="intake-option__desc">Google Drive · Dropbox<br>coming soon</span>
-            </button>
-            <label class="intake-option">
-              <input type="file" id="intake-drop-folder" webkitdirectory hidden />
-              <span class="intake-option__icon">⬓</span>
-              <span class="intake-option__label">Drop Folder</span>
-              <span class="intake-option__desc">Mixed media · any type<br>one-time import</span>
-            </label>
-            <label class="intake-option">
-              <input type="file" id="intake-upload-files" multiple hidden />
-              <span class="intake-option__icon">⎘</span>
-              <span class="intake-option__label">Upload Files</span>
-              <span class="intake-option__desc">PDFs · images · docs<br>single or batch</span>
-            </label>
-            <button class="intake-option" id="intake-messages-btn" type="button">
-              <span class="intake-option__icon">≡</span>
-              <span class="intake-option__label">Import Messages</span>
-              <span class="intake-option__desc">iMessage · SMS<br>CSV · XML export</span>
-            </button>
-            <button class="intake-option" id="intake-manual-btn" type="button">
-              <span class="intake-option__icon">✎</span>
-              <span class="intake-option__label">Manual Entry</span>
-              <span class="intake-option__desc">Events · contacts<br>notes · key dates</span>
-            </button>
-            <label class="intake-option">
-              <input type="file" id="intake-photo-batch" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple webkitdirectory hidden />
-              <span class="intake-option__icon">◫</span>
-              <span class="intake-option__label">Photo Batch</span>
-              <span class="intake-option__desc">Camera roll · folder<br>auto date-sorted</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Message import (revealed by Import Messages button) -->
+        <!-- Message import (hidden; revealed by dock Messages button) -->
         <div id="message-import-panel" style="display:none; margin-top:10px;">
           <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#aaa;margin-bottom:8px;">Import Messages</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -94,18 +52,8 @@
           <p id="import-result" style="font-size:11px;color:#888;margin-top:6px;" role="status" aria-live="polite"></p>
         </div>
 
-        <p style="font-size:10px;color:#bbb;margin-top:6px;line-height:1.5">
-          <strong style="color:#999">Add files</strong> attaches documents to a case as evidence.
-          Use <strong style="color:#999">Library</strong> for general reference docs (statutes, tenant rights guides) not tied to a specific case.
-        </p>
         <p id="intake-status" style="font-size:11px;color:#888;margin-top:8px;" role="status" aria-live="polite"></p>
       </div>
-
-      <nav class="dock" id="dock">
-        <button class="dock__item active" data-screen="home" type="button">⊞ Cases</button>
-        <button class="dock__item" data-screen="library" type="button">─ Library</button>
-        <button class="dock__item" data-screen="settings" type="button">◎ Settings</button>
-      </nav>
     </div>
 
     <!-- ══════════════════════════════════════
@@ -232,13 +180,8 @@
 
       </div><!-- /detail-canvas -->
 
-      <div class="export-bar">
-        <span class="export-bar__meta" id="brief-export-meta">0 items · 0 gaps</span>
-        <div class="export-bar__actions">
-          <button class="consult-btn" id="btn-open-consult" type="button">▶ Consult</button>
-          <button class="share-btn" id="btn-share" type="button">Share</button>
-          <button class="export-btn" id="btn-export" type="button">Export</button>
-        </div>
+      <div class="brief-statusbar" id="brief-statusbar">
+        <span id="brief-export-meta">0 items · 0 gaps</span>
       </div>
     </div>
 
@@ -275,8 +218,55 @@
       <div class="canvas">
 
         <div class="settings-section">
-          <div class="settings-section__title">Sync Folder</div>
-          <p class="settings-disabled">Coming soon — Connect a cloud folder to auto-import new documents.</p>
+          <div class="settings-section__title">Sync Folders</div>
+          <p style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5">Files added to these folders are auto-imported when the app opens. Works with iCloud Drive, OneDrive, etc.</p>
+          <div id="sync-folders-list"></div>
+          <button class="lib-upload-btn" id="btn-add-sync-folder" type="button">+ Connect Folder</button>
+          <p style="font-size:10px;color:#bbb;margin-top:6px">Suggested: C:\iCloudDrive\Documents\legal</p>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section__title">Features</div>
+          <label class="feature-toggle">
+            <div class="feature-toggle__info">
+              <span class="feature-toggle__label">Auto-organize on upload</span>
+              <span class="feature-toggle__desc">Automatically classify files when added</span>
+            </div>
+            <input type="checkbox" id="feat-auto-organize" hidden />
+            <span class="feature-toggle__switch"></span>
+          </label>
+          <label class="feature-toggle">
+            <div class="feature-toggle__info">
+              <span class="feature-toggle__label">Gap detection</span>
+              <span class="feature-toggle__desc">Highlight missing evidence categories</span>
+            </div>
+            <input type="checkbox" id="feat-gap-detection" hidden />
+            <span class="feature-toggle__switch"></span>
+          </label>
+          <label class="feature-toggle">
+            <div class="feature-toggle__info">
+              <span class="feature-toggle__label">OCR processing</span>
+              <span class="feature-toggle__desc">Extract text from photos and scanned PDFs</span>
+            </div>
+            <input type="checkbox" id="feat-ocr" hidden />
+            <span class="feature-toggle__switch"></span>
+          </label>
+          <label class="feature-toggle">
+            <div class="feature-toggle__info">
+              <span class="feature-toggle__label">Smart topic suggestions</span>
+              <span class="feature-toggle__desc">Suggest legal topics based on uploaded files</span>
+            </div>
+            <input type="checkbox" id="feat-smart-topics" hidden />
+            <span class="feature-toggle__switch"></span>
+          </label>
+          <label class="feature-toggle">
+            <div class="feature-toggle__info">
+              <span class="feature-toggle__label">Simulate offline for library links</span>
+              <span class="feature-toggle__desc">Always show cached snapshots instead of opening links</span>
+            </div>
+            <input type="checkbox" id="feat-simulate-offline" hidden />
+            <span class="feature-toggle__switch"></span>
+          </label>
         </div>
 
         <div class="settings-section">
@@ -403,6 +393,44 @@
     </div>
 
     <div id="resume-badge" style="display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#e8e8e8;font-size:11px;padding:5px 14px;border-radius:20px;z-index:500;pointer-events:none;transition:opacity 0.3s">↩ Resumed from last session</div>
+
+    <!-- ══════════════════════════════════════
+         GLOBAL DOCK (persistent, fixed bottom)
+    ══════════════════════════════════════ -->
+    <nav class="dock" id="dock">
+      <!-- Nav area (rendered/reordered by JS) -->
+      <div class="dock__nav" id="dock-nav">
+        <button class="dock__item active" data-screen="home" draggable="true" type="button" data-tip="Cases">⊞</button>
+        <button class="dock__item" data-screen="library" draggable="true" type="button" data-tip="Library">≡</button>
+        <button class="dock__item" data-screen="settings" draggable="true" type="button" data-tip="Settings">◎</button>
+      </div>
+
+      <!-- Separator -->
+      <div class="dock__sep"></div>
+
+      <!-- Contextual tools area (filled by JS per screen) -->
+      <div class="dock__tools" id="dock-tools"></div>
+
+      <!-- Flex spacer -->
+      <div class="dock__spacer"></div>
+
+      <!-- Upload button + popup -->
+      <div class="dock__upload-wrap" id="dock-upload-wrap">
+        <div class="dock-upload-menu" id="dock-upload-menu" style="display:none">
+          <label class="dock-upload-menu__item" data-tip="Upload files">
+            Files
+            <input type="file" id="dock-file-input" multiple hidden />
+          </label>
+          <label class="dock-upload-menu__item" data-tip="Import folder">
+            Folder
+            <input type="file" id="dock-folder-input" webkitdirectory hidden />
+          </label>
+          <button class="dock-upload-menu__item" id="dock-msg-menu-btn" type="button" data-tip="Import messages">Messages</button>
+        </div>
+        <button class="dock__item dock__item--upload" id="dock-upload-btn" type="button" data-tip="Upload files or folder">↑</button>
+      </div>
+    </nav>
+
     <script type="module" src="/main.ts"></script>
   </body>
 </html>

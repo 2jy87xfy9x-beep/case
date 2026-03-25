@@ -50,6 +50,9 @@ const repo = new IndexedDbCaseRepository();
 let allCases: Case[] = [];
 let currentCase: Case | null = null;
 let consultSlide = 0;
+let _multiselect = false;
+let _deleteMode = false;
+let _selectedCaseIds: Set<string> = new Set();
 
 // ── Library state (localStorage) ──────────────────────────────────────────────
 
@@ -58,6 +61,10 @@ interface LibraryItem {
   name: string;
   type: string;
   assignedCaseId?: string;
+  url?: string;           // external URL
+  content?: string;       // text content
+  snapshot?: string;      // cached text excerpt from URL (first 3000 chars)
+  snapshotAt?: string;    // ISO date when snapshot was taken
 }
 
 const LIB_KEY = 'caseOrg.library';
@@ -65,7 +72,19 @@ const JURISDICTION_KEY = 'caseOrg.jurisdiction';
 const TENANT_NAME_KEY = 'caseOrg.tenantName';
 const EXPORT_PREF_KEY = 'caseOrg.exportPref';
 const SETUP_DONE_KEY = 'caseOrg.setupDone';
+const SIMULATE_OFFLINE_KEY = 'caseOrg.simulateOffline';
+const SYNC_FOLDERS_KEY = 'caseOrg.syncFolders';
 const DEFAULT_JURISDICTION = 'Warren, Ohio (Trumbull County)';
+
+interface SyncFolder {
+  id: string;
+  name: string;
+  path: string;
+  processedFiles: string[];
+}
+
+// Store folder handles temporarily in memory (re-granted each session)
+const _syncHandles: Map<string, FileSystemDirectoryHandle> = new Map();
 
 // ── Topic archetypes ────────────────────────────────────────────────────────────
 
@@ -508,12 +527,9 @@ function showScreen(id: string): void {
     const el = document.getElementById(sid)!;
     el.classList.toggle('active', sid === id);
   }
-  const dock = document.getElementById('dock')!;
-  // Hide dock when inside brief
-  dock.style.display = id === 'screen-brief' ? 'none' : '';
 
-  // Update dock active state
-  document.querySelectorAll('.dock__item').forEach((btn) => {
+  // Update dock nav active state
+  document.querySelectorAll('.dock__item[data-screen]').forEach((btn) => {
     const screen = (btn as HTMLElement).dataset.screen ?? '';
     const targetId = screen === 'home' ? 'screen-home'
       : screen === 'library' ? 'screen-library'
@@ -522,10 +538,66 @@ function showScreen(id: string): void {
     btn.classList.toggle('active', targetId === id);
   });
 
+  // Update contextual tools
+  updateDockContext(id);
+
   // Undo navigation toast
   if (prev && prev !== id && prev === 'screen-brief') {
     _prevScreen = prev;
     showUndoNav('Back to case');
+  }
+}
+
+function updateDockContext(screenId: string): void {
+  const tools = document.getElementById('dock-tools');
+  if (!tools) return;
+
+  if (screenId === 'screen-home') {
+    tools.innerHTML = `
+      <button class="dock__item" id="dock-multiselect" type="button" data-tip="Select multiple cases">☐</button>
+      <button class="dock__item" id="dock-delete-mode" type="button" data-tip="Show safely deletable cases">⚠</button>
+      <button class="dock__item" id="dock-msg-btn" type="button" data-tip="Import messages">✉</button>
+    `;
+    document.getElementById('dock-multiselect')?.addEventListener('click', toggleMultiselect);
+    document.getElementById('dock-delete-mode')?.addEventListener('click', toggleDeleteMode);
+    document.getElementById('dock-msg-btn')?.addEventListener('click', () => {
+      const panel = document.getElementById('message-import-panel')!;
+      panel.style.display = panel.style.display === 'none' ? '' : 'none';
+      const canvas = document.getElementById('home-canvas');
+      if (panel.style.display !== 'none') canvas?.scrollTo({ top: canvas.scrollHeight, behavior: 'smooth' });
+    });
+  } else if (screenId === 'screen-brief') {
+    tools.innerHTML = `
+      <button class="dock__item" id="dock-consult" type="button" data-tip="Consult mode">▶</button>
+      <button class="dock__item" id="dock-export" type="button" data-tip="Export case">⬇</button>
+      <button class="dock__item" id="dock-share" type="button" data-tip="Share lawyer summary">⤴</button>
+    `;
+    document.getElementById('dock-consult')?.addEventListener('click', openConsult);
+    document.getElementById('dock-export')?.addEventListener('click', () => exportCurrentCase('fullCase'));
+    document.getElementById('dock-share')?.addEventListener('click', () => exportCurrentCase('lawyerSummary'));
+  } else if (screenId === 'screen-library') {
+    tools.innerHTML = `
+      <button class="dock__item" id="dock-add-link" type="button" data-tip="Add link to library">🔗</button>
+      <label class="dock__item" data-tip="Add document to library" style="display:flex;align-items:center;justify-content:center;cursor:pointer">
+        +
+        <input type="file" id="dock-lib-input" multiple hidden />
+      </label>
+    `;
+    document.getElementById('dock-add-link')?.addEventListener('click', showAddLinkModal);
+    document.getElementById('dock-lib-input')?.addEventListener('change', (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files || files.length === 0) return;
+      const library = loadLibrary();
+      Array.from(files).forEach((file) => {
+        library.push({ id: crypto.randomUUID(), name: file.name, type: inferType(file.name) });
+      });
+      saveLibrary(library);
+      renderLibrary();
+      updateLibraryMeta();
+      (e.target as HTMLInputElement).value = '';
+    });
+  } else {
+    tools.innerHTML = '';
   }
 }
 
@@ -549,16 +621,58 @@ function renderCaseList(): void {
   empty.style.display = 'none';
   list.innerHTML = allCases.map((c) => caseRowHTML(c)).join('');
 
-  // Attach click handlers
+  // Attach click handlers for row expansion
   list.querySelectorAll('.case-row[data-case-id]').forEach((row) => {
-    row.addEventListener('click', () => {
+    const header = row.querySelector('.case-row__header');
+    header?.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      // Don't toggle if clicking a button inside header
+      if (target.closest('button')) return;
       const id = (row as HTMLElement).dataset.caseId!;
+
+      if (_multiselect) {
+        // In multiselect mode, toggle selection
+        if (_selectedCaseIds.has(id)) {
+          _selectedCaseIds.delete(id);
+          row.classList.remove('selected');
+        } else {
+          _selectedCaseIds.add(id);
+          row.classList.add('selected');
+        }
+        return;
+      }
+
+      if (_deleteMode) {
+        // In delete mode, clicking a highlighted row deletes it
+        const c = allCases.find((x) => x.id === id);
+        const gaps = detectGaps(c!);
+        const safeToDelete = c!.evidence.length === 0 || gaps.length === 0;
+        if (safeToDelete) {
+          showConfirm(`Delete "${c?.title ?? id}"?`, 'All evidence and documents in this case will be removed. This cannot be undone.').then(async (ok) => {
+            if (!ok) return;
+            await repo.deleteCase(id);
+            showToast('Case deleted');
+            await loadHome();
+          });
+        }
+        return;
+      }
+
+      row.classList.toggle('expanded');
+    });
+  });
+
+  // Open Full Brief buttons
+  list.querySelectorAll('.case-row__action-btn--open').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.caseId!;
       openCase(id);
     });
   });
 
-  // Delete case buttons
-  list.querySelectorAll('.case-row__delete').forEach((btn) => {
+  // Delete case buttons (in expanded panel)
+  list.querySelectorAll('.case-row__action-btn--delete').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const id = (btn as HTMLElement).dataset.caseId!;
@@ -569,24 +683,63 @@ function renderCaseList(): void {
       await loadHome();
     });
   });
+
+  // Add files to case
+  list.querySelectorAll('.case-row__add-files-input').forEach((input) => {
+    input.addEventListener('change', async (e) => {
+      const caseId = (input as HTMLElement).dataset.caseId!;
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        await routeFilesToCase(Array.from(files), caseId);
+      }
+      (e.target as HTMLInputElement).value = '';
+    });
+  });
+
+  // Apply delete mode styling
+  if (_deleteMode) {
+    list.querySelectorAll('.case-row[data-case-id]').forEach((row) => {
+      const id = (row as HTMLElement).dataset.caseId!;
+      const c = allCases.find((x) => x.id === id);
+      if (!c) return;
+      const gaps = detectGaps(c);
+      const safeToDelete = c.evidence.length === 0 || gaps.length === 0;
+      if (safeToDelete) row.classList.add('case-row--safe-delete');
+    });
+  }
 }
 
 function caseRowHTML(c: Case): string {
   const gaps = detectGaps(c);
   const statusClass = c.status === 'gaps' || gaps.length > 0 ? 'status--gaps' : 'status--ready';
-  const statusText = gaps.length > 0 ? `${gaps.length} gaps` : 'ready';
+  const statusText = gaps.length > 0 ? `${gaps.length} gap${gaps.length !== 1 ? 's' : ''}` : 'ready';
   const categorySet = new Set(c.evidence.map((e) => e.category).filter(Boolean));
   const cats = Array.from(categorySet).slice(0, 4).join(', ') || '—';
   const meta = `${c.evidence.length} item${c.evidence.length !== 1 ? 's' : ''} · ${cats}`;
+  const summary = c.property?.address
+    ? `Tenant at ${c.property.address}${c.property.unit ? ', ' + c.property.unit : ''}.`
+    : `${c.evidence.length} evidence items · ${c.messages.length} message${c.messages.length !== 1 ? 's' : ''}.`;
+
   return `<div class="case-row" data-case-id="${esc(c.id)}">
-    <span class="case-row__icon">▸</span>
-    <div class="case-row__body">
-      <div class="case-row__name">${esc(c.title)}</div>
-      <div class="case-row__meta">${esc(meta)}</div>
+    <div class="case-row__header">
+      <span class="case-row__expand-icon">▸</span>
+      <div class="case-row__body">
+        <div class="case-row__name">${esc(c.title)}</div>
+        <div class="case-row__meta">${esc(meta)}</div>
+      </div>
+      <span class="case-row__gaps-badge ${statusClass}">${esc(statusText)}</span>
     </div>
-    <span class="case-row__status ${statusClass}">${esc(statusText)}</span>
-    <button class="case-row__delete" data-case-id="${esc(c.id)}" type="button" data-tip="Delete case" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:4px 8px;flex-shrink:0">×</button>
-    <span class="case-row__arrow">›</span>
+    <div class="case-row__panel">
+      <div class="case-row__summary">${esc(summary)}</div>
+      <div class="case-row__actions">
+        <label class="case-row__action-btn" data-tip="Add files to this case" style="cursor:pointer">
+          Add Files
+          <input type="file" class="case-row__add-files-input" data-case-id="${esc(c.id)}" multiple hidden />
+        </label>
+        <button class="case-row__action-btn case-row__action-btn--open" data-case-id="${esc(c.id)}" type="button">Open Full Brief →</button>
+        <button class="case-row__action-btn case-row__action-btn--delete" data-case-id="${esc(c.id)}" type="button" data-tip="Delete case">Delete</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -599,6 +752,49 @@ function updateLibraryMeta(): void {
     ? 'Tenant rights, ordinances, templates, correspondence'
     : `${count} document${count !== 1 ? 's' : ''} · tenant rights, ordinances, templates`;
   if (badge) badge.textContent = count > 0 ? String(count) : '─';
+}
+
+function toggleMultiselect(): void {
+  _multiselect = !_multiselect;
+  _selectedCaseIds.clear();
+  if (!_multiselect) {
+    document.querySelectorAll('.case-row.selected').forEach((r) => r.classList.remove('selected'));
+    document.querySelectorAll('.case-row--selectable').forEach((r) => r.classList.remove('case-row--selectable'));
+  } else {
+    _deleteMode = false;
+    document.querySelectorAll('.case-row[data-case-id]').forEach((r) => r.classList.add('case-row--selectable'));
+  }
+  const btn = document.getElementById('dock-multiselect');
+  if (btn) btn.style.background = _multiselect ? '#e8e8e8' : '';
+  showToast(_multiselect ? 'Multiselect on — tap cases to select' : 'Multiselect off');
+}
+
+function toggleDeleteMode(): void {
+  _deleteMode = !_deleteMode;
+  _multiselect = false;
+  _selectedCaseIds.clear();
+  renderCaseList();
+  const btn = document.getElementById('dock-delete-mode');
+  if (btn) btn.style.background = _deleteMode ? '#ffe0e0' : '';
+  if (_deleteMode) showToast('Delete mode — highlighted cases are safely deletable');
+  else showToast('Delete mode off');
+}
+
+async function routeFilesToCase(files: File[], caseId: string): Promise<void> {
+  const csvXml = files.filter(f => /\.(csv|xml)$/i.test(f.name));
+  const others = files.filter(f => !/\.(csv|xml)$/i.test(f.name));
+  for (const f of csvXml) {
+    await handleMessageImport(f);
+  }
+  if (others.length > 0) {
+    // Load the target case, save evidence to it
+    const targetCase = await repo.loadCase(caseId);
+    if (!targetCase) return;
+    const prevCurrent = currentCase;
+    currentCase = targetCase;
+    await handleFiles(others, 'upload');
+    if (!prevCurrent) currentCase = null;
+  }
 }
 
 function seedLibraryDefaults(): void {
@@ -843,7 +1039,7 @@ function renderBrief(c: Case): void {
     reprocessBtn.onclick = () => reprocessPhotos(c);
   }
 
-  // Export bar meta
+  // Brief statusbar meta
   const exportMeta = document.getElementById('brief-export-meta')!;
   exportMeta.textContent = `${c.evidence.length} item${c.evidence.length !== 1 ? 's' : ''} · ${gaps.length} gap${gaps.length !== 1 ? 's' : ''}`;
 
@@ -1293,6 +1489,7 @@ function renderSourceFiles(c: Case): void {
         <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
         <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
         ${hasPreview ? `<button class="ocr-toggle" data-ev-id="${esc(ev.id)}" type="button" data-tip="Show OCR text">text ${autoExpand ? '▾' : '▸'}</button>` : ''}
+        <button class="ev-promote-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Add to library as shared reference">→ lib</button>
         <button class="ev-edit-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Edit" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0">✏</button>
         <button class="ev-delete-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Delete" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">×</button>
       </div>
@@ -1320,6 +1517,27 @@ function renderSourceFiles(c: Case): void {
       if (!preview) return;
       const showing = preview.classList.toggle('visible');
       (btn as HTMLElement).textContent = showing ? 'text ▾' : 'text ▸';
+    });
+  });
+
+  list.querySelectorAll('.ev-promote-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const ev = c.evidence.find((x) => x.id === evId);
+      if (!ev) return;
+      const library = loadLibrary();
+      const already = library.some((li) => li.name === ev.title);
+      if (already) { showToast('Already in library'); return; }
+      library.push({
+        id: crypto.randomUUID(),
+        name: ev.title,
+        type: inferType(ev.sourceFile ?? 'file'),
+        content: ev.body,
+      });
+      saveLibrary(library);
+      updateLibraryMeta();
+      showToast('Added to library');
     });
   });
 
@@ -2048,13 +2266,19 @@ function renderLibrary(): void {
       <div class="lib-group__label">${esc(g.label)}</div>
       ${groupItems.length === 0
         ? '<p class="lib-empty">No items.</p>'
-        : groupItems.map((li) => `
-          <div class="lib-item">
-            <span class="lib-item__icon">📄</span>
-            <span class="lib-item__name">${esc(li.name)}</span>
-            <span class="lib-item__type">${esc(li.type)}${isSeeded(li) ? ' · stub' : ''}</span>
-          </div>
-        `).join('')
+        : groupItems.map((li) => {
+            const stubHtml = isSeeded(li)
+              ? `<button class="stub-info" data-tip="Stub — pre-populated from your jurisdiction. No content added yet. Click to fill in or attach the full document." type="button">?</button>`
+              : '';
+            const icon = li.url ? '🔗' : '📄';
+            const extraClass = li.url ? ' lib-item--link' : '';
+            return `<div class="lib-item${extraClass}" data-lib-id="${esc(li.id)}">
+              <span class="lib-item__icon">${icon}</span>
+              <span class="lib-item__name">${esc(li.name)}</span>
+              <span class="lib-item__type">${esc(li.type)}${isSeeded(li) ? '' : ''}${stubHtml}</span>
+              <button class="lib-item__delete" data-lib-id="${esc(li.id)}" type="button" data-tip="Remove from library">×</button>
+            </div>`;
+          }).join('')
       }
     </div>`;
   }).join('');
@@ -2083,6 +2307,143 @@ function renderLibrary(): void {
       const templateId = (btn as HTMLElement).dataset.templateId ?? '';
       showTemplateModal(templateId);
     });
+  });
+
+  // Wire library item delete buttons
+  container.querySelectorAll('.lib-item__delete').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const libId = (btn as HTMLElement).dataset.libId!;
+      const library = loadLibrary().filter((li) => li.id !== libId);
+      saveLibrary(library);
+      renderLibrary();
+      updateLibraryMeta();
+      showToast('Removed from library');
+    });
+  });
+
+  // Wire link item clicks
+  container.querySelectorAll('.lib-item--link').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      const libId = (item as HTMLElement).dataset.libId!;
+      const lib = loadLibrary();
+      const li = lib.find((x) => x.id === libId);
+      if (!li || !li.url) return;
+
+      const isOffline = localStorage.getItem(SIMULATE_OFFLINE_KEY) === '1' || !navigator.onLine;
+      const isSimulating = localStorage.getItem(SIMULATE_OFFLINE_KEY) === '1';
+
+      if (isOffline) {
+        showSnapshotModal(li, isSimulating);
+      } else {
+        window.open(li.url, '_blank');
+        // Try to update snapshot in background
+        fetchLinkSnapshot(li.url).then((snapshot) => {
+          if (!snapshot) return;
+          const updated = loadLibrary().map((x) => x.id === libId ? { ...x, snapshot, snapshotAt: new Date().toISOString() } : x);
+          saveLibrary(updated);
+        }).catch(() => {/* ignore */});
+      }
+    });
+  });
+}
+
+function showSnapshotModal(li: LibraryItem, isSimulating: boolean): void {
+  document.getElementById('snapshot-modal-backdrop')?.remove();
+  const backdrop = document.createElement('div');
+  backdrop.id = 'snapshot-modal-backdrop';
+  backdrop.className = 'snapshot-modal-backdrop';
+  const dateStr = li.snapshotAt ? new Date(li.snapshotAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'unknown date';
+  const bannerText = isSimulating ? '⚠ Simulating offline — showing cached snapshot' : `⚠ Offline — showing cached snapshot from ${dateStr}`;
+  const contentHtml = li.snapshot
+    ? `<div class="snapshot-modal__content">${esc(li.snapshot)}</div>`
+    : `<div class="snapshot-modal__content" style="color:#bbb;font-style:italic">Snapshot unavailable (CORS restriction)</div>`;
+
+  backdrop.innerHTML = `
+    <div class="snapshot-modal">
+      <div class="snapshot-modal__title">${esc(li.name)}</div>
+      <div class="snapshot-modal__url">${esc(li.url ?? '')}</div>
+      <div class="snapshot-modal__banner">${esc(bannerText)}</div>
+      ${contentHtml}
+      <button class="snapshot-modal__close" type="button">Close</button>
+    </div>`;
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('.snapshot-modal__close')!.addEventListener('click', () => backdrop.remove());
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+}
+
+async function fetchLinkSnapshot(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    // Strip HTML tags for plain text
+    const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return plain.slice(0, 3000);
+  } catch {
+    return null;
+  }
+}
+
+function showAddLinkModal(): void {
+  document.getElementById('add-link-modal-backdrop')?.remove();
+  const backdrop = document.createElement('div');
+  backdrop.id = 'add-link-modal-backdrop';
+  backdrop.className = 'add-link-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="add-link-modal">
+      <div class="add-link-modal__title">Add Link to Library</div>
+      <div class="add-link-modal__field">
+        <label class="add-link-modal__label">Name</label>
+        <input class="add-link-modal__input" id="add-link-name" type="text" placeholder="e.g. Ohio Tenant Rights Guide" autocomplete="off" />
+      </div>
+      <div class="add-link-modal__field">
+        <label class="add-link-modal__label">URL</label>
+        <input class="add-link-modal__input" id="add-link-url" type="url" placeholder="https://..." autocomplete="off" />
+      </div>
+      <div class="add-link-modal__field">
+        <label class="add-link-modal__label">Notes (optional)</label>
+        <textarea class="add-link-modal__textarea" id="add-link-notes" rows="2" placeholder="Any notes about this link…"></textarea>
+      </div>
+      <div class="add-link-modal__actions">
+        <button class="add-link-modal__save" id="add-link-save" type="button">Save</button>
+        <button class="add-link-modal__cancel" type="button">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+
+  const close = () => backdrop.remove();
+  backdrop.querySelector('.add-link-modal__cancel')!.addEventListener('click', close);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+
+  backdrop.querySelector('#add-link-save')!.addEventListener('click', async () => {
+    const name = (backdrop.querySelector('#add-link-name') as HTMLInputElement).value.trim();
+    const url = (backdrop.querySelector('#add-link-url') as HTMLInputElement).value.trim();
+    const content = (backdrop.querySelector('#add-link-notes') as HTMLTextAreaElement).value.trim();
+    if (!name || !url) { showToast('Name and URL are required'); return; }
+
+    const newItem: LibraryItem = {
+      id: crypto.randomUUID(),
+      name,
+      type: 'Link',
+      url,
+      content: content || undefined,
+    };
+
+    // Try to fetch snapshot
+    const snapshot = await fetchLinkSnapshot(url);
+    if (snapshot) {
+      newItem.snapshot = snapshot;
+      newItem.snapshotAt = new Date().toISOString();
+    }
+
+    const library = loadLibrary();
+    library.push(newItem);
+    saveLibrary(library);
+    renderLibrary();
+    updateLibraryMeta();
+    showToast(snapshot ? 'Link added with snapshot' : 'Link added (snapshot unavailable — CORS restriction)');
+    close();
   });
 }
 
@@ -2161,6 +2522,121 @@ function loadSettings(): void {
   jurEl.value = localStorage.getItem(JURISDICTION_KEY) ?? '';
   tenantEl.value = localStorage.getItem(TENANT_NAME_KEY) ?? '';
   exportEl.value = localStorage.getItem(EXPORT_PREF_KEY) ?? 'markdown';
+
+  // Feature toggles — defaults: auto-organize, gap-detection, ocr, smart-topics = true; simulate-offline = false
+  const featDefaults: Record<string, boolean> = {
+    'feat-auto-organize': true,
+    'feat-gap-detection': true,
+    'feat-ocr': true,
+    'feat-smart-topics': true,
+    'feat-simulate-offline': false,
+  };
+  for (const [id, defaultVal] of Object.entries(featDefaults)) {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) continue;
+    const stored = localStorage.getItem(`caseOrg.${id}`);
+    el.checked = stored !== null ? stored === '1' : defaultVal;
+  }
+
+  // Sync offline simulate flag
+  const simEl = document.getElementById('feat-simulate-offline') as HTMLInputElement | null;
+  if (simEl) simEl.checked = localStorage.getItem(SIMULATE_OFFLINE_KEY) === '1';
+
+  // Render sync folders
+  renderSyncFolders();
+}
+
+// ── Sync folders (Task 6) ────────────────────────────────────────────────────
+
+function loadSyncFolders(): SyncFolder[] {
+  try { return JSON.parse(localStorage.getItem(SYNC_FOLDERS_KEY) ?? '[]'); } catch { return []; }
+}
+
+function saveSyncFolders(folders: SyncFolder[]): void {
+  localStorage.setItem(SYNC_FOLDERS_KEY, JSON.stringify(folders));
+}
+
+async function connectSyncFolder(): Promise<void> {
+  try {
+    const handle = await (window as unknown as { showDirectoryPicker: (opts?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({ mode: 'read' });
+    const id = crypto.randomUUID();
+    const name = handle.name;
+    _syncHandles.set(id, handle);
+    const folders = loadSyncFolders();
+    folders.push({ id, name, path: name, processedFiles: [] });
+    saveSyncFolders(folders);
+    renderSyncFolders();
+    showToast(`Syncing ${name}`);
+    await processSyncFolder(id, handle);
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') showToast('Could not connect folder');
+  }
+}
+
+async function processSyncFolder(folderId: string, handle: FileSystemDirectoryHandle): Promise<void> {
+  const folders = loadSyncFolders();
+  const folder = folders.find((f) => f.id === folderId);
+  if (!folder) return;
+
+  const files: File[] = [];
+  for await (const [name, fileHandle] of (handle as unknown as AsyncIterable<[string, FileSystemFileHandle & { kind: string }]>)) {
+    if ((fileHandle as { kind: string }).kind === 'file') {
+      if (!folder.processedFiles.includes(name)) {
+        const file = await (fileHandle as FileSystemFileHandle).getFile();
+        files.push(file);
+        folder.processedFiles.push(name);
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    saveSyncFolders(folders);
+    showToast(`Importing ${files.length} new file${files.length !== 1 ? 's' : ''} from ${folder.name}…`);
+    await handleFiles(files, 'upload');
+  }
+  saveSyncFolders(folders);
+}
+
+function renderSyncFolders(): void {
+  const container = document.getElementById('sync-folders-list');
+  if (!container) return;
+  const folders = loadSyncFolders();
+  if (folders.length === 0) {
+    container.innerHTML = '<p style="font-size:11px;color:#bbb;margin-bottom:8px">No folders connected.</p>';
+    return;
+  }
+  container.innerHTML = folders.map((f) => `
+    <div class="sync-folder-row">
+      <span class="sync-folder-row__icon">⟳</span>
+      <div class="sync-folder-row__body">
+        <div class="sync-folder-row__name">${esc(f.name)}</div>
+        <div class="sync-folder-row__meta">${f.processedFiles.length} files processed · <button class="sync-reconnect-btn" data-id="${esc(f.id)}" type="button" data-tip="Re-grant folder access to scan for new files">Re-scan ↺</button></div>
+      </div>
+      <button class="sync-remove-btn" data-id="${esc(f.id)}" type="button" data-tip="Remove sync folder">×</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.sync-reconnect-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const handle = await (window as unknown as { showDirectoryPicker: (opts?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({ mode: 'read' });
+        const id = (btn as HTMLElement).dataset.id!;
+        _syncHandles.set(id, handle);
+        await processSyncFolder(id, handle);
+        renderSyncFolders();
+      } catch { /* ignore */ }
+    });
+  });
+
+  container.querySelectorAll('.sync-remove-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).dataset.id!;
+      const folders = loadSyncFolders().filter((f) => f.id !== id);
+      saveSyncFolders(folders);
+      _syncHandles.delete(id);
+      renderSyncFolders();
+    });
+  });
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -2193,6 +2669,61 @@ function showConfirm(message: string, detail: string, confirmLabel = 'Delete', d
     backdrop.querySelector('.app-confirm-cancel')!.addEventListener('click', () => close(false));
     backdrop.querySelector('.app-confirm-ok')!.addEventListener('click', () => close(true));
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+  });
+}
+
+// ── Dock drag reorder ─────────────────────────────────────────────────────────
+
+const DOCK_ORDER_KEY = 'caseOrg.dockOrder';
+
+function initDockDragReorder(): void {
+  const navEl = document.getElementById('dock-nav');
+  if (!navEl) return;
+
+  // Load persisted order
+  const savedOrder = (() => {
+    try { return JSON.parse(localStorage.getItem(DOCK_ORDER_KEY) ?? 'null'); } catch { return null; }
+  })();
+
+  if (savedOrder && Array.isArray(savedOrder)) {
+    const buttons = Array.from(navEl.querySelectorAll('.dock__item[data-screen]')) as HTMLElement[];
+    const sorted = savedOrder
+      .map((screen: string) => buttons.find((b) => b.dataset.screen === screen))
+      .filter(Boolean) as HTMLElement[];
+    // Re-append in order
+    sorted.forEach((b) => navEl.appendChild(b));
+  }
+
+  let dragSrc: HTMLElement | null = null;
+
+  navEl.addEventListener('dragstart', (e) => {
+    dragSrc = (e.target as HTMLElement).closest('.dock__item[data-screen]') as HTMLElement | null;
+    if (dragSrc) {
+      e.dataTransfer!.effectAllowed = 'move';
+      e.dataTransfer!.setData('text/plain', dragSrc.dataset.screen ?? '');
+      setTimeout(() => { dragSrc!.style.opacity = '0.4'; }, 0);
+    }
+  });
+
+  navEl.addEventListener('dragend', () => {
+    if (dragSrc) dragSrc.style.opacity = '';
+    dragSrc = null;
+  });
+
+  navEl.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+  });
+
+  navEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (!dragSrc) return;
+    const target = (e.target as HTMLElement).closest('.dock__item[data-screen]') as HTMLElement | null;
+    if (!target || target === dragSrc) return;
+    navEl.insertBefore(dragSrc, target);
+    // Save order
+    const order = Array.from(navEl.querySelectorAll('.dock__item[data-screen]')).map((b) => (b as HTMLElement).dataset.screen ?? '');
+    localStorage.setItem(DOCK_ORDER_KEY, JSON.stringify(order));
   });
 }
 
@@ -2239,17 +2770,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── Topbar add button
-  document.getElementById('topbar-add-btn')?.addEventListener('click', () => {
-    const panel = document.getElementById('intake-panel')!;
-    panel.classList.toggle('open');
-    if (panel.classList.contains('open')) {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  });
-
-  // ── Dock navigation
-  document.querySelectorAll('.dock__item').forEach((btn) => {
+  // ── Dock navigation (nav items with data-screen)
+  document.querySelectorAll('.dock__item[data-screen]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const screen = (btn as HTMLElement).dataset.screen ?? 'home';
       if (screen === 'library') {
@@ -2264,6 +2786,62 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ── Dock nav drag-to-reorder
+  initDockDragReorder();
+
+  // ── Dock upload button
+  const dockUploadBtn = document.getElementById('dock-upload-btn')!;
+  const dockUploadMenu = document.getElementById('dock-upload-menu')!;
+  dockUploadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dockUploadMenu.style.display = dockUploadMenu.style.display === 'none' ? '' : 'none';
+  });
+  document.addEventListener('click', () => { dockUploadMenu.style.display = 'none'; });
+
+  document.getElementById('dock-file-input')?.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length > 0) handleFiles(files, 'upload');
+    dockUploadMenu.style.display = 'none';
+  });
+
+  document.getElementById('dock-folder-input')?.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length > 0) handleFiles(files, 'drop-folder');
+    dockUploadMenu.style.display = 'none';
+  });
+
+  document.getElementById('dock-msg-menu-btn')?.addEventListener('click', () => {
+    const panel = document.getElementById('message-import-panel')!;
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    dockUploadMenu.style.display = 'none';
+  });
+
+  // ── Canvas drop zone (home canvas)
+  const homeCanvas = document.getElementById('home-canvas');
+  if (homeCanvas) {
+    document.addEventListener('dragover', (e) => {
+      if (!document.getElementById('screen-home')?.classList.contains('active')) return;
+      e.preventDefault();
+      homeCanvas.classList.add('drag-over');
+    });
+    document.addEventListener('dragleave', (e) => {
+      if (!(e.relatedTarget) || !(homeCanvas.contains(e.relatedTarget as Node))) {
+        homeCanvas.classList.remove('drag-over');
+      }
+    });
+    document.addEventListener('drop', async (e) => {
+      if (!document.getElementById('screen-home')?.classList.contains('active')) return;
+      e.preventDefault();
+      homeCanvas.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length === 0) return;
+      const csvXml = files.filter(f => /\.(csv|xml)$/i.test(f.name));
+      const others = files.filter(f => !/\.(csv|xml)$/i.test(f.name));
+      for (const f of csvXml) await handleMessageImport(f);
+      if (others.length > 0) await handleFiles(others, 'upload');
+    });
+  }
+
   // ── Back buttons
   document.getElementById('back-from-brief')!.addEventListener('click', () => {
     currentCase = null;
@@ -2274,39 +2852,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('back-from-settings')!.addEventListener('click', () => {
     showScreen('screen-home');
-  });
-
-  // ── Library row on home (element removed; navigation via dock only)
-
-
-  // ── Intake toggle
-  document.getElementById('intake-toggle')!.addEventListener('click', () => {
-    const panel = document.getElementById('intake-panel')!;
-    panel.classList.toggle('open');
-  });
-
-  // ── Drop folder
-  document.getElementById('intake-drop-folder')!.addEventListener('change', (e) => {
-    const files = (e.target as HTMLInputElement).files;
-    if (files && files.length > 0) handleFiles(files, 'drop-folder');
-  });
-
-  // ── Upload files
-  document.getElementById('intake-upload-files')!.addEventListener('change', (e) => {
-    const files = (e.target as HTMLInputElement).files;
-    if (files && files.length > 0) handleFiles(files, 'upload');
-  });
-
-  // ── Photo batch
-  document.getElementById('intake-photo-batch')!.addEventListener('change', (e) => {
-    const files = (e.target as HTMLInputElement).files;
-    if (files && files.length > 0) handleFiles(files, 'upload');
-  });
-
-  // ── Import messages button
-  document.getElementById('intake-messages-btn')!.addEventListener('click', () => {
-    const panel = document.getElementById('message-import-panel')!;
-    panel.style.display = panel.style.display === 'none' ? '' : 'none';
   });
 
   // ── CSV import
@@ -2327,28 +2872,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (file) handleScreenshotImport(file);
   });
 
-  // ── Manual entry button
-  document.getElementById('intake-manual-btn')!.addEventListener('click', () => {
-    if (currentCase) {
-      showScreen('screen-brief');
-    } else {
-      alert('Open or create a case first.');
-    }
-  });
-
-  // ── Brief: Consult button
-  document.getElementById('btn-open-consult')!.addEventListener('click', openConsult);
-
-  // ── Brief: Export
-  document.getElementById('btn-export')!.addEventListener('click', () => {
-    exportCurrentCase('fullCase');
-  });
-
-  // ── Brief: Share
-  document.getElementById('btn-share')!.addEventListener('click', () => {
-    exportCurrentCase('lawyerSummary');
-  });
-
   // ── Consult overlay navigation
   document.getElementById('consult-exit-btn')!.addEventListener('click', closeConsult);
   document.getElementById('consult-prev-btn')!.addEventListener('click', prevSlide);
@@ -2361,7 +2884,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ── Library: file upload
+  // ── Library: file upload (in-screen button)
   document.getElementById('lib-file-input')!.addEventListener('change', (e) => {
     const files = (e.target as HTMLInputElement).files;
     if (!files || files.length === 0) return;
@@ -2376,7 +2899,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveLibrary(library);
     renderLibrary();
     updateLibraryMeta();
-    // Reset input
     (e.target as HTMLInputElement).value = '';
   });
 
@@ -2389,6 +2911,24 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('settings-export-pref')!.addEventListener('change', (e) => {
     localStorage.setItem(EXPORT_PREF_KEY, (e.target as HTMLSelectElement).value);
+  });
+
+  // ── Feature toggles
+  const featIds = ['feat-auto-organize', 'feat-gap-detection', 'feat-ocr', 'feat-smart-topics', 'feat-simulate-offline'];
+  featIds.forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      localStorage.setItem(`caseOrg.${id}`, checked ? '1' : '0');
+      // Special case for simulate-offline
+      if (id === 'feat-simulate-offline') {
+        localStorage.setItem(SIMULATE_OFFLINE_KEY, checked ? '1' : '0');
+      }
+    });
+  });
+
+  // ── Settings: sync folder connect
+  document.getElementById('btn-add-sync-folder')?.addEventListener('click', () => {
+    connectSyncFolder();
   });
 
   // ── Settings: reset
