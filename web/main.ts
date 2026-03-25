@@ -5,7 +5,8 @@
  * Plus: Consultation overlay
  */
 
-import { autoProcess } from '../app/application/autoProcess.js';
+import { autoProcess, classifyFromContent } from '../app/application/autoProcess.js';
+import { extractExifDate } from '../app/application/extractExifDate.js';
 import { extractKeyFacts } from '../app/application/filterKeyFacts.js';
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
 import { importScreenshotOcr } from '../app/application/importScreenshotOcr.js';
@@ -193,6 +194,70 @@ async function openCase(caseId: string): Promise<void> {
   showScreen('screen-brief');
 }
 
+async function reprocessPhotos(c: Case): Promise<void> {
+  const photoItems = c.evidence.filter((ev) => ev.category === 'photo' || ev.requiresUserReview);
+  if (photoItems.length === 0) {
+    alert('No photos to re-process.');
+    return;
+  }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.accept = 'image/*';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  input.onchange = async () => {
+    const files = Array.from(input.files ?? []);
+    input.remove();
+    if (files.length === 0) return;
+
+    const statusEl = document.getElementById('intake-status')!;
+    let updated = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      statusEl.textContent = `Re-processing ${i + 1} of ${files.length}: ${file.name}…`;
+
+      const ev = photoItems.find((e) => {
+        const stored = e.title.toLowerCase();
+        const incoming = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+        return stored === incoming || stored === file.name.toLowerCase();
+      });
+      if (!ev) continue;
+
+      try {
+        const ocrService = buildOcrService();
+        const ocrResult = await ocrService.extractText(file);
+        const reclassified = classifyFromContent(ocrResult.text);
+        const exifDate = await extractExifDate(file);
+
+        const updatedEv = {
+          ...ev,
+          body: ocrResult.text,
+          requiresUserReview: ocrResult.text.trim().length < 50,
+          category: reclassified?.category ?? ev.category,
+          title: reclassified?.label ?? ev.title,
+          dateTime: exifDate ?? ev.dateTime,
+          provenance: { ...ev.provenance, tier: ocrResult.tier, extractedAt: new Date() }
+        };
+
+        await repo.saveEvidence(c.id, [updatedEv]);
+        updated++;
+      } catch {
+        // Skip files that fail; continue with others
+      }
+    }
+
+    statusEl.textContent = `Re-processed ${updated} item${updated !== 1 ? 's' : ''}.`;
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    await openCase(c.id);
+  };
+
+  input.click();
+}
+
 function renderBrief(c: Case): void {
   // Topbar — click title to rename
   const titleEl = document.getElementById('brief-title')!;
@@ -266,6 +331,12 @@ function renderBrief(c: Case): void {
   // Source files
   renderSourceFiles(c);
   renderNeedsReview(c);
+
+  // Re-process button
+  const reprocessBtn = document.getElementById('btn-reprocess');
+  if (reprocessBtn) {
+    reprocessBtn.onclick = () => reprocessPhotos(c);
+  }
 
   // Export bar meta
   const exportMeta = document.getElementById('brief-export-meta')!;
