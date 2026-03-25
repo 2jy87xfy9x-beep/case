@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#2d5a3d" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Case" />
@@ -12,346 +12,356 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <header class="appbar">
-      <h1 class="appbar__title">Case Organizer</h1>
-      <p id="status" class="appbar__status" role="status"></p>
-    </header>
 
-    <main class="screens" id="main-screens">
+    <!-- ══════════════════════════════════════
+         SCREEN: HOME / CANVAS
+    ══════════════════════════════════════ -->
+    <div id="screen-home" class="screen active">
+      <div class="topbar">
+        <span class="topbar__title">Cases</span>
+        <span class="topbar__sync">
+          <span class="sync-dot"></span>
+          synced just now
+        </span>
+      </div>
 
-      <!-- ── INBOX ─────────────────────────────────────────────────── -->
-      <section id="screen-inbox" class="screen" aria-labelledby="inbox-heading">
-        <h2 id="inbox-heading" class="sr-only">Inbox</h2>
-
-        <!-- Getting started orientation -->
-        <details class="card getting-started" id="getting-started">
-          <summary class="getting-started__toggle">
-            <span class="getting-started__icon" aria-hidden="true">📋</span>
-            <strong>How to use this app</strong>
-            <span class="getting-started__hint">Follow these steps in order</span>
-          </summary>
-          <ol class="getting-started__steps">
-            <li><strong>Inbox</strong> — Add evidence (documents, notes, images) and import text messages.</li>
-            <li><strong>Timeline</strong> — See all items in date order. Tie events to evidence and spot gaps.</li>
-            <li><strong>Evidence</strong> — Browse, categorise, and review each item; confirm OCR text is correct.</li>
-            <li><strong>Review</strong> — See suggested gaps in your case. Mark what to ask your lawyer about.</li>
-            <li><strong>Lawyer</strong> — Record topics to discuss and research notes to bring to your consultation.</li>
-            <li><strong>Export</strong> — Download your case as a Markdown file or backup to share with counsel.</li>
-          </ol>
-          <p class="getting-started__note">
-            <strong>Not legal advice.</strong> This app helps you <em>organise</em> materials — it does not tell you what will win in court or substitute for a lawyer.
-          </p>
-        </details>
-
-        <div id="export-reminder" class="banner banner--warning banner--hidden" role="note">
-          <span id="export-reminder-text"></span>
-          <button type="button" id="btn-reminder-dismiss" class="banner__dismiss" aria-label="Dismiss reminder">✕</button>
+      <div class="canvas">
+        <div class="section-label">Active</div>
+        <div class="case-list" id="case-list">
+          <!-- Rendered by JS -->
         </div>
+        <p id="case-list-empty" class="empty-state" style="display:none">No cases yet. Add files below to get started.</p>
 
-        <!-- Add evidence form -->
-        <div class="card">
-          <h3 class="card__heading">Add evidence</h3>
-          <form id="add-evidence-form" novalidate>
-            <label class="field">
-              <span class="field__label">Title <span class="required" aria-hidden="true">*</span></span>
-              <input id="ev-title" type="text" autocomplete="off" placeholder="e.g. Rent increase email, Feb 2025" required />
-            </label>
-            <label class="field">
-              <span class="field__label">Date (optional)</span>
-              <input id="ev-date" type="date" />
-            </label>
-            <label class="field">
-              <span class="field__label">Attach image (optional)</span>
-              <input id="ev-image" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
-              <span class="field__hint">Attaches the image name and date. Type the extracted text below.</span>
-            </label>
-            <label class="field">
-              <span class="field__label">Text / description</span>
-              <textarea id="ev-body" rows="4" placeholder="Paste or type extracted text, or describe the document."></textarea>
-            </label>
-            <button type="submit" class="btn btn--primary">Add to case</button>
-          </form>
-        </div>
-
-        <!-- Import messages -->
-        <div class="card">
-          <h3 class="card__heading">Import text messages</h3>
-          <details class="import-config">
-            <summary class="import-config__toggle">Sender attribution (optional)</summary>
-            <div class="import-config__body">
-              <label class="field">
-                <span class="field__label">Your name / number in the export</span>
-                <input id="cfg-own" type="text" placeholder="e.g. Me, +1 555 000 0000" autocomplete="off" />
-              </label>
-              <label class="field">
-                <span class="field__label">Landlord's name / number in the export</span>
-                <input id="cfg-landlord" type="text" placeholder="e.g. Bob Smith, +1 555 111 1111" autocomplete="off" />
-              </label>
+        <div class="section-label">Library</div>
+        <div class="case-list">
+          <div class="case-row" id="btn-goto-library">
+            <span class="case-row__icon">─</span>
+            <div class="case-row__body">
+              <div class="case-row__name">General Legal Docs</div>
+              <div class="case-row__meta" id="library-meta">0 items · not yet assigned to a case</div>
             </div>
-          </details>
-          <div class="import-row">
-            <label class="btn import-btn">
+            <span class="case-row__status status--lib">library</span>
+            <span class="case-row__arrow">›</span>
+          </div>
+        </div>
+
+        <div class="intake-toggle" id="intake-toggle">+ add files &nbsp;·&nbsp; tap to see all options</div>
+        <div class="intake-panel" id="intake-panel">
+          <div class="intake-grid">
+            <button class="intake-option intake-option--disabled" title="Coming soon — Connect Google Drive or Dropbox" type="button">
+              <span class="intake-option__icon">⟳</span>
+              <span class="intake-option__label">Sync Folder</span>
+              <span class="intake-option__desc">Google Drive · Dropbox<br>coming soon</span>
+            </button>
+            <label class="intake-option">
+              <input type="file" id="intake-drop-folder" webkitdirectory hidden />
+              <span class="intake-option__icon">⬓</span>
+              <span class="intake-option__label">Drop Folder</span>
+              <span class="intake-option__desc">Mixed media · any type<br>one-time import</span>
+            </label>
+            <label class="intake-option">
+              <input type="file" id="intake-upload-files" multiple hidden />
+              <span class="intake-option__icon">⎘</span>
+              <span class="intake-option__label">Upload Files</span>
+              <span class="intake-option__desc">PDFs · images · docs<br>single or batch</span>
+            </label>
+            <button class="intake-option" id="intake-messages-btn" type="button">
+              <span class="intake-option__icon">≡</span>
+              <span class="intake-option__label">Import Messages</span>
+              <span class="intake-option__desc">iMessage · SMS<br>CSV · XML export</span>
+            </button>
+            <button class="intake-option" id="intake-manual-btn" type="button">
+              <span class="intake-option__icon">✎</span>
+              <span class="intake-option__label">Manual Entry</span>
+              <span class="intake-option__desc">Events · contacts<br>notes · key dates</span>
+            </button>
+            <label class="intake-option">
+              <input type="file" id="intake-photo-batch" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple webkitdirectory hidden />
+              <span class="intake-option__icon">◫</span>
+              <span class="intake-option__label">Photo Batch</span>
+              <span class="intake-option__desc">Camera roll · folder<br>auto date-sorted</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Message import (revealed by Import Messages button) -->
+        <div id="message-import-panel" style="display:none; margin-top:10px;">
+          <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#aaa;margin-bottom:8px;">Import Messages</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <label class="lib-upload-btn">
               iMazing CSV
               <input type="file" id="import-csv" accept=".csv" hidden />
             </label>
-            <label class="btn import-btn">
+            <label class="lib-upload-btn">
               SMS Backup XML
               <input type="file" id="import-xml" accept=".xml" hidden />
             </label>
           </div>
-          <p id="import-result" class="import-result" role="status" aria-live="polite"></p>
+          <p id="import-result" style="font-size:11px;color:#888;margin-top:6px;" role="status" aria-live="polite"></p>
         </div>
 
-        <!-- Batch import images -->
-        <div class="card">
-          <h3 class="card__heading">Batch import images</h3>
-          <p class="muted" style="margin-bottom:0.75rem">Point to a folder of images and the app will create an evidence entry for each one. You can review and edit each item afterwards.</p>
-          <div class="import-row">
-            <label class="btn import-btn">
-              Select folder
-              <input type="file" id="import-folder" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" webkitdirectory hidden />
-            </label>
-            <label class="btn import-btn">
-              Select images
-              <input type="file" id="import-images" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
-            </label>
+        <p id="intake-status" style="font-size:11px;color:#888;margin-top:8px;" role="status" aria-live="polite"></p>
+      </div>
+
+      <nav class="dock" id="dock">
+        <button class="dock__item active" data-screen="home" type="button">⊞ Cases</button>
+        <button class="dock__item" data-screen="library" type="button">─ Library</button>
+        <button class="dock__item" data-screen="settings" type="button">◎ Settings</button>
+      </nav>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         SCREEN: CASE BRIEF
+    ══════════════════════════════════════ -->
+    <div id="screen-brief" class="screen">
+      <div class="detail-topbar">
+        <button class="back-btn" id="back-from-brief" type="button">‹ Cases</button>
+        <span class="detail-title" id="brief-title">Case</span>
+        <span class="detail-status" id="brief-status-badge">ready</span>
+      </div>
+      <div class="banner" id="brief-banner" style="display:none">
+        ✦ &nbsp;Auto-organized · last processed just now
+      </div>
+
+      <div class="detail-canvas" id="brief-canvas">
+
+        <!-- 1. Case Summary -->
+        <div class="brief-section">
+          <div class="brief-section__header">
+            <span>Case Summary</span>
+            <span style="font-size:9px;color:#bbb;letter-spacing:0.06em" id="brief-summary-label">AUTO-GENERATED</span>
           </div>
-          <p id="batch-import-result" class="import-result" role="status" aria-live="polite"></p>
+          <div class="brief-summary" id="brief-summary-text">—</div>
         </div>
 
-        <!-- Needs review -->
-        <div class="card" id="unreviewed-card">
-          <h3 class="card__heading">Needs review <span id="unreviewed-count" class="badge"></span></h3>
-          <ul id="unreviewed-list" class="item-list"></ul>
-          <p id="unreviewed-empty" class="muted" aria-live="polite">All items reviewed.</p>
-        </div>
-      </section>
-
-      <!-- ── TIMELINE ───────────────────────────────────────────────── -->
-      <section id="screen-timeline" class="screen screen--hidden" aria-labelledby="timeline-heading">
-        <h2 id="timeline-heading" class="sr-only">Timeline</h2>
-        <div class="card">
-          <h3 class="card__heading">Timeline <span id="timeline-count" class="badge"></span></h3>
-          <ul id="timeline-list" class="timeline-list"></ul>
-          <p id="timeline-empty" class="muted">No items yet. Add evidence or import messages in Inbox.</p>
-        </div>
-      </section>
-
-      <!-- ── EVIDENCE ───────────────────────────────────────────────── -->
-      <section id="screen-evidence" class="screen screen--hidden" aria-labelledby="evidence-heading">
-        <h2 id="evidence-heading" class="sr-only">Evidence</h2>
-        <div class="evidence-layout">
-          <div class="card">
-            <h3 class="card__heading">Evidence <span id="evidence-count" class="badge"></span></h3>
-            <ul id="evidence-list" class="item-list"></ul>
-            <p id="evidence-empty" class="muted">No evidence yet. Add items in Inbox.</p>
+        <!-- 2. Legal Framing -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Legal Framing</span></div>
+          <div class="jurisdiction-field">
+            <label for="brief-jurisdiction">Jurisdiction</label>
+            <input type="text" id="brief-jurisdiction" placeholder="e.g. California, Los Angeles" autocomplete="off" />
           </div>
-
-          <div class="card card--detail" id="evidence-detail-card">
-            <h3 class="card__heading">Detail</h3>
-            <p id="detail-empty" class="muted">Select an evidence item.</p>
-            <div id="detail-body" class="detail-body detail-body--hidden">
-              <p class="detail__title" id="detail-title"></p>
-              <p class="muted detail__meta" id="detail-meta"></p>
-
-              <div id="ocr-warning" class="inline-warning inline-warning--hidden" role="alert">
-                <strong>Review required.</strong> Text was extracted automatically and may contain errors.
-                Please review carefully before relying on it.
-              </div>
-
-              <label class="field">
-                <span class="field__label">Category</span>
-                <select id="detail-category" aria-label="Evidence category"></select>
-              </label>
-
-              <pre id="detail-text" class="detail-text"></pre>
-
-              <button type="button" id="btn-confirm-review" class="btn btn--sm btn--confirm" aria-label="Mark text as reviewed">
-                Mark reviewed ✓
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── GAPS ───────────────────────────────────────────────────── -->
-      <section id="screen-gaps" class="screen screen--hidden" aria-labelledby="gaps-heading">
-        <h2 id="gaps-heading" class="sr-only">Review issues</h2>
-        <div class="card">
-          <h3 class="card__heading">Review issues <span id="gaps-badge" class="badge"></span></h3>
-          <p class="muted gaps-intro">
-            Items below suggest documents that may strengthen your case. These are not legal
-            conclusions — only organisational observations based on what you have added.
-            Use this screen to identify what to ask your lawyer about.
-          </p>
-          <ul id="gaps-list" class="gaps-list"></ul>
-          <p id="gaps-empty" class="muted">No gaps detected. Your case looks complete.</p>
-        </div>
-      </section>
-
-      <!-- ── LAW ───────────────────────────────────────────────────────── -->
-      <section id="screen-law" class="screen screen--hidden" aria-labelledby="law-heading">
-        <h2 id="law-heading" class="sr-only">Prepare for a lawyer</h2>
-
-        <div class="card">
-          <p class="law-disclaimer" role="note">
-            Use this screen to prepare for your lawyer consultation. Record topics you want
-            to discuss and notes from your own research. These are <em>your</em> questions
-            and observations — not legal conclusions from the app.
-          </p>
+          <div id="brief-claims-list"><!-- Rendered by JS --></div>
+          <p id="brief-claims-empty" class="empty-state" style="display:none">No discussion topics added yet.</p>
         </div>
 
-        <!-- Topics to discuss -->
-        <div class="card">
-          <h3 class="card__heading">Topics to discuss <span id="claims-count" class="badge"></span></h3>
-          <ul id="claims-list" class="item-list law-list"></ul>
-          <p id="claims-empty" class="muted">No topics yet. Add one below.</p>
+        <!-- 3. Client Goal -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Client Goal</span></div>
+          <textarea class="goal-textarea" id="brief-client-goal" placeholder="What outcome does the client want?"></textarea>
+        </div>
 
-          <div id="claim-detail" class="claim-detail" hidden>
-            <div id="claim-detail-body"></div>
-            <div class="add-question-row field">
-              <input id="claim-question-input" type="text" placeholder="Add a question to ask your lawyer" autocomplete="off" />
-              <button type="button" id="btn-add-claim-question" class="btn btn--sm">Add</button>
-            </div>
-          </div>
+        <!-- 4. Timeline -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Timeline</span></div>
+          <div id="brief-timeline"><!-- Rendered by JS --></div>
+          <p id="brief-timeline-empty" class="empty-state" style="display:none">No timeline items yet.</p>
+        </div>
 
-          <details class="add-form-toggle">
-            <summary class="add-form-toggle__label">Add a topic</summary>
-            <form id="add-claim-form" class="add-form" novalidate>
-              <label class="field">
-                <span class="field__label">Topic title <span class="required" aria-hidden="true">*</span></span>
-                <input id="claim-title" type="text" autocomplete="off" placeholder="e.g. Late fee — above legal cap" required />
-              </label>
-              <label class="field">
-                <span class="field__label">Description (your words)</span>
-                <textarea id="claim-desc" rows="3" placeholder="What happened? What are you unsure about?"></textarea>
-              </label>
-              <label class="field">
-                <span class="field__label">Status</span>
-                <select id="claim-status">
-                  <option value="researching">Researching</option>
-                  <option value="ready-to-discuss">Ready to discuss</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="dropped">Dropped</option>
-                </select>
-              </label>
-              <button type="submit" class="btn btn--primary">Save topic</button>
-            </form>
+        <!-- 5. Key Facts -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Key Facts</span></div>
+          <div id="brief-key-facts"><!-- Rendered by JS --></div>
+          <p id="brief-key-facts-empty" class="empty-state" style="display:none">No key facts extracted yet.</p>
+        </div>
+
+        <!-- 6. Gaps -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Gaps</span></div>
+          <div id="brief-gaps-list"><!-- Rendered by JS --></div>
+          <p id="brief-gaps-empty" class="empty-state" style="display:none">No gaps detected. Case looks complete.</p>
+        </div>
+
+        <!-- 7. Library Docs Surfaced -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Library Docs Surfaced</span></div>
+          <div id="brief-library-refs"><!-- Rendered by JS --></div>
+          <p id="brief-library-empty" class="empty-state">No library docs surfaced yet.</p>
+        </div>
+
+        <!-- 8. Source Files -->
+        <div class="brief-section">
+          <div class="brief-section__header"><span>Source Files</span></div>
+          <details class="sources-details" id="brief-sources-details">
+            <summary>
+              <span id="brief-sources-label">0 files</span>
+              <span style="font-size:11px;color:#aaa;">▸</span>
+            </summary>
+            <div class="sources-details__body" id="brief-sources-list"><!-- Rendered by JS --></div>
           </details>
         </div>
 
-        <!-- Research notes -->
-        <div class="card">
-          <h3 class="card__heading">Research notes <span id="notes-count" class="badge"></span></h3>
-          <p class="muted" style="margin-bottom:10px">Notes on what <em>you</em> have read or learned. The app does not generate these.</p>
-          <ul id="notes-list" class="item-list law-list"></ul>
-          <p id="notes-empty" class="muted">No notes yet.</p>
+      </div>
 
-          <details class="add-form-toggle">
-            <summary class="add-form-toggle__label">Add a research note</summary>
-            <form id="add-note-form" class="add-form" novalidate>
-              <label class="field">
-                <span class="field__label">Topic <span class="required" aria-hidden="true">*</span></span>
-                <input id="note-topic" type="text" autocomplete="off" placeholder="e.g. Late fee caps in this state" required />
-              </label>
-              <label class="field">
-                <span class="field__label">Summary (your words)</span>
-                <textarea id="note-summary" rows="3" placeholder="What did you learn?"></textarea>
-              </label>
-              <label class="field">
-                <span class="field__label">Source (URL or citation)</span>
-                <input id="note-source" type="text" autocomplete="off" placeholder="e.g. tenant-rights.org/late-fees" />
-              </label>
-              <label class="field">
-                <span class="field__label">Applies to this case?</span>
-                <select id="note-applies">
-                  <option value="maybe">Maybe</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </label>
-              <button type="submit" class="btn btn--primary">Save note</button>
-            </form>
-          </details>
+      <div class="export-bar">
+        <span class="export-bar__meta" id="brief-export-meta">0 items · 0 gaps</span>
+        <div class="export-bar__actions">
+          <button class="consult-btn" id="btn-open-consult" type="button">▶ Consult</button>
+          <button class="share-btn" id="btn-share" type="button">Share</button>
+          <button class="export-btn" id="btn-export" type="button">Export</button>
         </div>
-      </section>
+      </div>
+    </div>
 
-      <!-- ── EXPORT ─────────────────────────────────────────────────── -->
-      <section id="screen-export" class="screen screen--hidden" aria-labelledby="export-heading">
-        <h2 id="export-heading" class="sr-only">Export</h2>
-
-        <div id="export-reminder-export" class="banner banner--warning banner--hidden" role="note">
-          <span id="export-reminder-export-text"></span>
+    <!-- ══════════════════════════════════════
+         SCREEN: LIBRARY
+    ══════════════════════════════════════ -->
+    <div id="screen-library" class="screen">
+      <div class="detail-topbar">
+        <button class="back-btn" id="back-from-library" type="button">‹ Cases</button>
+        <span class="detail-title">Library</span>
+      </div>
+      <div class="canvas">
+        <div class="lib-upload-row">
+          <label class="lib-upload-btn">
+            + Add Document
+            <input type="file" id="lib-file-input" multiple hidden />
+          </label>
         </div>
 
-        <div class="card">
-          <h3 class="card__heading">Export case</h3>
-          <p class="muted">Download your case as a Markdown file to share with a lawyer or save a backup.</p>
+        <div id="lib-groups">
+          <!-- Groups rendered by JS -->
+        </div>
+      </div>
+    </div>
 
-          <p class="last-exported" id="last-exported-label"></p>
+    <!-- ══════════════════════════════════════
+         SCREEN: SETTINGS
+    ══════════════════════════════════════ -->
+    <div id="screen-settings" class="screen">
+      <div class="detail-topbar">
+        <button class="back-btn" id="back-from-settings" type="button">‹ Cases</button>
+        <span class="detail-title">Settings</span>
+      </div>
+      <div class="canvas">
 
-          <div class="export-actions">
-            <button type="button" id="btn-export-full" class="btn btn--primary">
-              Full case (.md)
-            </button>
-            <button type="button" id="btn-export-summary" class="btn">
-              Lawyer summary (.md)
-            </button>
-          </div>
+        <div class="settings-section">
+          <div class="settings-section__title">Sync Folder</div>
+          <p class="settings-disabled">Coming soon — Connect a cloud folder to auto-import new documents.</p>
+        </div>
 
-          <div class="disclaimer">
-            <strong>Text only.</strong> Original documents remain on your device and are the
-            authoritative source. This export contains extracted or manually entered text only.
+        <div class="settings-section">
+          <div class="settings-section__title">Default Jurisdiction</div>
+          <div class="settings-field">
+            <label for="settings-jurisdiction">Jurisdiction</label>
+            <input type="text" id="settings-jurisdiction" placeholder="e.g. California, Los Angeles" autocomplete="off" />
           </div>
         </div>
 
-        <div class="card">
-          <h3 class="card__heading">Move to another device</h3>
-          <p class="muted">Download a backup of all case data (text, messages, notes, lawyers) to open on another device. Original image files are not included — re-upload them after restoring.</p>
-
-          <div class="export-actions">
-            <button type="button" id="btn-backup-download" class="btn btn--primary">
-              Download backup (.json)
-            </button>
-            <label class="btn" id="lbl-backup-restore">
-              Restore from backup
-              <input type="file" id="inp-backup-restore" accept=".json" class="sr-only" />
-            </label>
+        <div class="settings-section">
+          <div class="settings-section__title">Party Defaults</div>
+          <div class="settings-field">
+            <label for="settings-tenant-name">Tenant Name</label>
+            <input type="text" id="settings-tenant-name" placeholder="e.g. Jane Smith" autocomplete="off" />
           </div>
-
-          <div id="backup-restore-status" class="muted" aria-live="polite"></div>
         </div>
-      </section>
 
-    </main>
+        <div class="settings-section">
+          <div class="settings-section__title">Export Preferences</div>
+          <div class="settings-field">
+            <label for="settings-export-pref">Export format</label>
+            <select id="settings-export-pref">
+              <option value="markdown">Markdown (.md)</option>
+              <option value="zip">ZIP archive</option>
+              <option value="both">Both (markdown + zip)</option>
+            </select>
+          </div>
+        </div>
 
-    <!-- Bottom navigation -->
-    <nav class="bottom-nav" aria-label="App navigation">
-      <button class="nav-btn nav-btn--active" data-tab="inbox" type="button">
-        <span class="nav-icon" aria-hidden="true">📥</span>
-        <span class="nav-label">Inbox</span>
-      </button>
-      <button class="nav-btn" data-tab="timeline" type="button">
-        <span class="nav-icon" aria-hidden="true">📅</span>
-        <span class="nav-label">Timeline</span>
-      </button>
-      <button class="nav-btn" data-tab="evidence" type="button">
-        <span class="nav-icon" aria-hidden="true">📁</span>
-        <span class="nav-label">Evidence</span>
-      </button>
-      <button class="nav-btn" data-tab="gaps" type="button" id="nav-btn-gaps">
-        <span class="nav-icon" aria-hidden="true">🔍</span>
-        <span class="nav-label">Review <span id="nav-gaps-badge" class="nav-badge" aria-label="gaps detected"></span></span>
-      </button>
-      <button class="nav-btn" data-tab="law" type="button">
-        <span class="nav-icon" aria-hidden="true">⚖️</span>
-        <span class="nav-label">Lawyer</span>
-      </button>
-      <button class="nav-btn" data-tab="export" type="button">
-        <span class="nav-icon" aria-hidden="true">📤</span>
-        <span class="nav-label">Export</span>
-      </button>
-    </nav>
+        <div class="settings-section">
+          <div class="settings-section__title">Data</div>
+          <button class="settings-btn" id="btn-reset-cache" type="button">Reset / Clear all data</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         CONSULTATION MODE OVERLAY
+    ══════════════════════════════════════ -->
+    <div id="consult-overlay" class="consult-overlay">
+      <div class="consult-topbar">
+        <button class="consult-exit" id="consult-exit-btn" type="button">ESC / Exit</button>
+        <div class="consult-progress-track">
+          <div class="consult-progress-fill" id="consult-progress-fill"></div>
+        </div>
+        <span class="consult-slide-indicator" id="consult-slide-indicator">1 / 6</span>
+        <span class="consult-case-label" id="consult-case-label">Case</span>
+      </div>
+
+      <div class="consult-body">
+
+        <!-- Slide 1: Orientation -->
+        <div class="consult-slide active" id="consult-slide-0">
+          <div class="cs-label">Slide 1 of 6</div>
+          <div class="cs-heading">What happened and where</div>
+          <div class="cs-body">
+            <div class="orient-grid" id="consult-orient-grid">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Slide 2: The Dispute -->
+        <div class="consult-slide" id="consult-slide-1">
+          <div class="cs-label">Slide 2 of 6</div>
+          <div class="cs-heading">The dispute</div>
+          <div class="cs-body" id="consult-dispute-body">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Slide 3: The Proof -->
+        <div class="consult-slide" id="consult-slide-2">
+          <div class="cs-label">Slide 3 of 6</div>
+          <div class="cs-heading">The proof</div>
+          <div class="cs-body" id="consult-proof-body">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Slide 4: Timeline -->
+        <div class="consult-slide" id="consult-slide-3">
+          <div class="cs-label">Slide 4 of 6</div>
+          <div class="cs-heading">Timeline</div>
+          <div class="cs-body" id="consult-timeline-body">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Slide 5: Gaps -->
+        <div class="consult-slide" id="consult-slide-4">
+          <div class="cs-label">Slide 5 of 6</div>
+          <div class="cs-heading">What to ask</div>
+          <div class="cs-body" id="consult-gaps-body">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Slide 6: Ready -->
+        <div class="consult-slide" id="consult-slide-5">
+          <div class="cs-label">Slide 6 of 6</div>
+          <div class="cs-heading">Ready to share</div>
+          <div class="cs-body" id="consult-ready-body">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <div class="consult-nav">
+        <button class="c-btn" id="consult-prev-btn" type="button" disabled>← Prev</button>
+        <div class="consult-nav__dots" id="consult-dots">
+          <button class="nav-dot active" data-slide="0" type="button"></button>
+          <button class="nav-dot" data-slide="1" type="button"></button>
+          <button class="nav-dot" data-slide="2" type="button"></button>
+          <button class="nav-dot" data-slide="3" type="button"></button>
+          <button class="nav-dot" data-slide="4" type="button"></button>
+          <button class="nav-dot" data-slide="5" type="button"></button>
+        </div>
+        <button class="c-btn" id="consult-next-btn" type="button">Next →</button>
+      </div>
+    </div>
 
     <script type="module" src="/main.ts"></script>
   </body>

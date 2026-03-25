@@ -1,910 +1,727 @@
+/**
+ * main.ts — v2 UI for Case Organizer
+ *
+ * Screens: Home, Brief, Library, Settings
+ * Plus: Consultation overlay
+ */
+
+import { autoProcess } from '../app/application/autoProcess.js';
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
-import {
-  addClaim,
-  addLegalNote,
-  createClaim,
-  createLegalNote,
-  removeClaim,
-  removeLegalNote,
-  updateClaim
-} from '../app/domain/claimsOps.js';
-import { setEvidenceCategory } from '../app/domain/evidenceOps.js';
-import { needsExportReminder } from '../app/domain/exportReminder.js';
-import { detectGaps } from '../app/domain/gapDetector.js';
+import { createCase } from '../app/domain/factories.js';
 import { buildTimeline } from '../app/domain/timeline.js';
+import { detectGaps } from '../app/domain/gapDetector.js';
 import { parseImazingCsv } from '../app/messages/parsers/imazingCsv.js';
 import { parseSmsXml } from '../app/messages/parsers/smsXml.js';
 import { IndexedDbCaseRepository } from '../app/storage/IndexedDbCaseRepository.js';
-import type { Case, Claim, Evidence, EvidenceCategory, LegalNote, Message, TimelineItem } from '../app/domain/types.js';
+import type { Case, Gap, TimelineItem } from '../app/domain/types.js';
 
-// ── Constants ──────────────────────────────────────────────────────────────
-
-const CASE_ID = 'mvp-local-case';
-const CASE_TITLE = 'Local case';
-const APP_VERSION = '0.1.0';
-const REMINDER_DISMISSED_KEY = 'caseOrg.reminderDismissed';
-
-const CATEGORY_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: '— None —' },
-  { value: 'lease', label: 'Lease' },
-  { value: 'payment', label: 'Payment record' },
-  { value: 'rent-notice', label: 'Rent notice' },
-  { value: 'fee-notice', label: 'Fee notice' },
-  { value: 'other', label: 'Other' }
-];
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-type Tab = 'inbox' | 'timeline' | 'evidence' | 'gaps' | 'law' | 'export';
-
-// ── State ──────────────────────────────────────────────────────────────────
+// ── State ──────────────────────────────────────────────────────────────────────
 
 const repo = new IndexedDbCaseRepository();
+let allCases: Case[] = [];
 let currentCase: Case | null = null;
-let activeTab: Tab = 'inbox';
-let selectedEvidenceId: string | null = null;
-let reminderDismissed = false;
-let selectedClaimId: string | null = null;
-let selectedNoteId: string | null = null;
+let consultSlide = 0;
 
-// ── DOM queries ────────────────────────────────────────────────────────────
+// ── Library state (localStorage) ──────────────────────────────────────────────
 
-const elStatus = document.querySelector<HTMLElement>('#status')!;
-
-// Inbox
-const elReminder = document.querySelector<HTMLElement>('#export-reminder')!;
-const elReminderText = document.querySelector<HTMLElement>('#export-reminder-text')!;
-const btnReminderDismiss = document.querySelector<HTMLButtonElement>('#btn-reminder-dismiss')!;
-const formAddEvidence = document.querySelector<HTMLFormElement>('#add-evidence-form')!;
-const inpTitle = document.querySelector<HTMLInputElement>('#ev-title')!;
-const inpDate = document.querySelector<HTMLInputElement>('#ev-date')!;
-const inpBody = document.querySelector<HTMLTextAreaElement>('#ev-body')!;
-const inpImage = document.querySelector<HTMLInputElement>('#ev-image')!;
-const inpCsv = document.querySelector<HTMLInputElement>('#import-csv')!;
-const inpXml = document.querySelector<HTMLInputElement>('#import-xml')!;
-const elImportResult = document.querySelector<HTMLElement>('#import-result')!;
-const inpFolder = document.querySelector<HTMLInputElement>('#import-folder')!;
-const inpImages = document.querySelector<HTMLInputElement>('#import-images')!;
-const elBatchResult = document.querySelector<HTMLElement>('#batch-import-result')!;
-const inpCfgOwn = document.querySelector<HTMLInputElement>('#cfg-own')!;
-const inpCfgLandlord = document.querySelector<HTMLInputElement>('#cfg-landlord')!;
-const elUnreviewedList = document.querySelector<HTMLUListElement>('#unreviewed-list')!;
-const elUnreviewedEmpty = document.querySelector<HTMLElement>('#unreviewed-empty')!;
-const elUnreviewedCount = document.querySelector<HTMLElement>('#unreviewed-count')!;
-
-// Timeline
-const elTimelineList = document.querySelector<HTMLElement>('#timeline-list')!;
-const elTimelineEmpty = document.querySelector<HTMLElement>('#timeline-empty')!;
-const elTimelineCount = document.querySelector<HTMLElement>('#timeline-count')!;
-
-// Evidence
-const elEvidenceList = document.querySelector<HTMLUListElement>('#evidence-list')!;
-const elEvidenceEmpty = document.querySelector<HTMLElement>('#evidence-empty')!;
-const elEvidenceCount = document.querySelector<HTMLElement>('#evidence-count')!;
-const elDetailEmpty = document.querySelector<HTMLElement>('#detail-empty')!;
-const elDetailBody = document.querySelector<HTMLElement>('#detail-body')!;
-const elDetailTitle = document.querySelector<HTMLElement>('#detail-title')!;
-const elDetailMeta = document.querySelector<HTMLElement>('#detail-meta')!;
-const elDetailCategory = document.querySelector<HTMLSelectElement>('#detail-category')!;
-const elDetailText = document.querySelector<HTMLElement>('#detail-text')!;
-const elOcrWarning = document.querySelector<HTMLElement>('#ocr-warning')!;
-const btnConfirmReview = document.querySelector<HTMLButtonElement>('#btn-confirm-review')!;
-
-// Gaps
-const elGapsList = document.querySelector<HTMLElement>('#gaps-list')!;
-const elGapsEmpty = document.querySelector<HTMLElement>('#gaps-empty')!;
-const elGapsBadge = document.querySelector<HTMLElement>('#gaps-badge')!;
-const elClaimsCount = document.querySelector<HTMLElement>('#claims-count')!;
-const elNotesCount = document.querySelector<HTMLElement>('#notes-count')!;
-const elNavGapsBadge = document.querySelector<HTMLElement>('#nav-gaps-badge')!;
-
-// Export
-const elExportReminder = document.querySelector<HTMLElement>('#export-reminder-export')!;
-const elExportReminderText = document.querySelector<HTMLElement>('#export-reminder-export-text')!;
-const elLastExported = document.querySelector<HTMLElement>('#last-exported-label')!;
-const btnExportFull = document.querySelector<HTMLButtonElement>('#btn-export-full')!;
-const btnExportSummary = document.querySelector<HTMLButtonElement>('#btn-export-summary')!;
-const btnBackupDownload = document.querySelector<HTMLButtonElement>('#btn-backup-download')!;
-const inpBackupRestore = document.querySelector<HTMLInputElement>('#inp-backup-restore')!;
-const elBackupRestoreStatus = document.querySelector<HTMLElement>('#backup-restore-status')!;
-
-// Law tab
-const formAddClaim = document.querySelector<HTMLFormElement>('#add-claim-form')!;
-const inpClaimTitle = document.querySelector<HTMLInputElement>('#claim-title')!;
-const inpClaimDesc = document.querySelector<HTMLTextAreaElement>('#claim-desc')!;
-const inpClaimStatus = document.querySelector<HTMLSelectElement>('#claim-status')!;
-const elClaimsList = document.querySelector<HTMLElement>('#claims-list')!;
-const elClaimsEmpty = document.querySelector<HTMLElement>('#claims-empty')!;
-const elClaimDetail = document.querySelector<HTMLElement>('#claim-detail')!;
-const elClaimDetailBody = document.querySelector<HTMLElement>('#claim-detail-body')!;
-const inpClaimQuestion = document.querySelector<HTMLInputElement>('#claim-question-input')!;
-const btnAddClaimQuestion = document.querySelector<HTMLButtonElement>('#btn-add-claim-question')!;
-const formAddNote = document.querySelector<HTMLFormElement>('#add-note-form')!;
-const inpNoteTopic = document.querySelector<HTMLInputElement>('#note-topic')!;
-const inpNoteSummary = document.querySelector<HTMLTextAreaElement>('#note-summary')!;
-const inpNoteSource = document.querySelector<HTMLInputElement>('#note-source')!;
-const inpNoteApplies = document.querySelector<HTMLSelectElement>('#note-applies')!;
-const elNotesList = document.querySelector<HTMLElement>('#notes-list')!;
-const elNotesEmpty = document.querySelector<HTMLElement>('#notes-empty')!;
-
-// Nav buttons
-const navBtns = document.querySelectorAll<HTMLButtonElement>('.nav-btn');
-
-// ── Utilities ──────────────────────────────────────────────────────────────
-
-function setStatus(msg: string): void {
-  elStatus.textContent = msg;
+interface LibraryItem {
+  id: string;
+  name: string;
+  type: string;
+  assignedCaseId?: string;
 }
 
-function setBadge(el: HTMLElement, count: number): void {
-  el.textContent = count > 0 ? String(count) : '';
-  el.hidden = count === 0;
-}
+const LIB_KEY = 'caseOrg.library';
+const JURISDICTION_KEY = 'caseOrg.jurisdiction';
+const TENANT_NAME_KEY = 'caseOrg.tenantName';
+const EXPORT_PREF_KEY = 'caseOrg.exportPref';
 
-function formatDate(d: Date): string {
-  if (!Number.isFinite(d.getTime())) return '(no date)';
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
-
-function formatDateTime(d: Date): string {
-  if (!Number.isFinite(d.getTime())) return '(no date)';
-  return d.toLocaleString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  });
-}
-
-function downloadMarkdown(filename: string, content: string): void {
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.append(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function exportFilename(variant: 'full' | 'summary'): string {
-  const d = new Date();
-  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return variant === 'full' ? `case-export-${stamp}.md` : `case-lawyer-summary-${stamp}.md`;
-}
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-    reader.readAsText(file);
-  });
-}
-
-// ── Tab navigation ─────────────────────────────────────────────────────────
-
-function switchTab(tab: Tab): void {
-  activeTab = tab;
-
-  document.querySelectorAll<HTMLElement>('.screen').forEach((el) => {
-    el.classList.toggle('screen--hidden', el.id !== `screen-${tab}`);
-  });
-
-  navBtns.forEach((btn) => {
-    btn.classList.toggle('nav-btn--active', btn.dataset['tab'] === tab);
-    btn.setAttribute('aria-current', btn.dataset['tab'] === tab ? 'page' : 'false');
-  });
-
-  render();
-}
-
-// ── Seed / case init ───────────────────────────────────────────────────────
-
-function makeSampleEvidence(): Evidence[] {
-  const now = new Date();
-  const mk = (title: string, body: string): Evidence => ({
-    id: crypto.randomUUID(),
-    dateTime: now,
-    title,
-    body,
-    requiresUserReview: false,
-    provenance: { tier: 'manual', extractedAt: now }
-  });
-  return [
-    mk('Sample lease excerpt', 'Tenancy term: 12 months commencing 1 January 2024.'),
-    mk('Rent increase email', 'Landlord notified rent change effective next month. New rent: $1,850.')
-  ];
-}
-
-async function ensureCase(): Promise<Case> {
-  let c = await repo.loadCase(CASE_ID);
-  if (c) return c;
-  const shell: Case = { id: CASE_ID, title: CASE_TITLE, lastExportedAt: null, evidence: [], messages: [], claims: [], legalNotes: [] };
-  await repo.saveCase(shell);
-  const evidence = makeSampleEvidence();
-  await repo.saveEvidence(CASE_ID, evidence);
-  const loaded = await repo.loadCase(CASE_ID);
-  if (!loaded) throw new Error('Failed to initialise case');
-  return loaded;
-}
-
-// ── Render: inbox ──────────────────────────────────────────────────────────
-
-function renderReminder(): void {
-  if (!currentCase) return;
-  const needs = needsExportReminder(currentCase, new Date()) && !reminderDismissed;
-  const msg = currentCase.lastExportedAt
-    ? `Your last export was ${formatDate(currentCase.lastExportedAt)}. Consider saving a new backup.`
-    : 'You have not exported this case yet. Consider saving a lawyer packet or backup.';
-
-  // Inbox reminder banner
-  elReminderText.textContent = msg;
-  elReminder.classList.toggle('banner--hidden', !needs);
-
-  // Export screen reminder banner
-  elExportReminderText.textContent = msg;
-  elExportReminder.classList.toggle('banner--hidden', !needs);
-}
-
-function renderUnreviewed(): void {
-  if (!currentCase) return;
-  const items = currentCase.evidence.filter((e) => e.requiresUserReview);
-  setBadge(elUnreviewedCount, items.length);
-  elUnreviewedList.innerHTML = '';
-  if (items.length === 0) {
-    elUnreviewedEmpty.hidden = false;
-    return;
-  }
-  elUnreviewedEmpty.hidden = true;
-  for (const ev of items) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'item-btn';
-    btn.innerHTML = `<span class="item-btn__title">${escHtml(ev.title)}</span>
-      <span class="item-btn__meta">Added ${formatDate(ev.dateTime)} · OCR needs review</span>`;
-    btn.addEventListener('click', () => {
-      selectedEvidenceId = ev.id;
-      switchTab('evidence');
-    });
-    li.append(btn);
-    elUnreviewedList.append(li);
+function loadLibrary(): LibraryItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(LIB_KEY) ?? '[]');
+  } catch {
+    return [];
   }
 }
 
-// ── Render: timeline ───────────────────────────────────────────────────────
-
-function renderTimeline(): void {
-  if (!currentCase) return;
-  const items: TimelineItem[] = buildTimeline(currentCase.evidence, currentCase.messages);
-  setBadge(elTimelineCount, items.length);
-  elTimelineList.innerHTML = '';
-
-  if (items.length === 0) {
-    elTimelineEmpty.hidden = false;
-    return;
-  }
-  elTimelineEmpty.hidden = true;
-
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.className = `timeline-item timeline-item--${item.kind}`;
-
-    if (item.kind === 'evidence') {
-      const ev = item as Evidence & { kind: 'evidence' };
-      li.innerHTML = `
-        <span class="tl-kind tl-kind--evidence" aria-hidden="true">📄</span>
-        <div class="tl-content">
-          <span class="tl-title">${escHtml(ev.title)}</span>
-          ${ev.category ? `<span class="tl-tag">${escHtml(ev.category)}</span>` : ''}
-          ${ev.requiresUserReview ? '<span class="tl-tag tl-tag--warn">needs review</span>' : ''}
-          <span class="tl-date">${formatDate(ev.dateTime)}</span>
-        </div>`;
-    } else {
-      const msg = item as Message & { kind: 'message' };
-      li.innerHTML = `
-        <span class="tl-kind tl-kind--message tl-kind--${msg.direction}" aria-hidden="true">${msg.direction === 'sent' ? '💬' : '📨'}</span>
-        <div class="tl-content">
-          <span class="tl-title">${escHtml(msg.body.slice(0, 120))}${msg.body.length > 120 ? '…' : ''}</span>
-          <span class="tl-tag tl-tag--sender">${escHtml(msg.sender)} · ${msg.direction}</span>
-          <span class="tl-date">${formatDateTime(msg.dateTime)}</span>
-        </div>`;
-    }
-    elTimelineList.append(li);
-  }
+function saveLibrary(items: LibraryItem[]): void {
+  localStorage.setItem(LIB_KEY, JSON.stringify(items));
 }
 
-// ── Render: evidence list ──────────────────────────────────────────────────
-
-function renderEvidenceList(): void {
-  if (!currentCase) return;
-  const { evidence } = currentCase;
-  setBadge(elEvidenceCount, evidence.length);
-  elEvidenceList.innerHTML = '';
-
-  if (evidence.length === 0) {
-    elEvidenceEmpty.hidden = false;
-    return;
-  }
-  elEvidenceEmpty.hidden = true;
-
-  for (const ev of evidence) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'item-btn';
-    btn.setAttribute('aria-current', ev.id === selectedEvidenceId ? 'true' : 'false');
-    btn.innerHTML = `
-      <span class="item-btn__title">${escHtml(ev.title)}</span>
-      <span class="item-btn__meta">
-        ${ev.category ? `<span class="tag">${escHtml(ev.category)}</span>` : '<span class="tag tag--none">uncategorized</span>'}
-        ${ev.requiresUserReview ? ' <span class="tag tag--warn">review</span>' : ''}
-      </span>`;
-    btn.addEventListener('click', () => {
-      selectedEvidenceId = ev.id;
-      renderEvidenceDetail();
-      renderEvidenceList(); // update aria-current
-    });
-    li.append(btn);
-    elEvidenceList.append(li);
-  }
-}
-
-function fillCategorySelect(value: EvidenceCategory | undefined): void {
-  elDetailCategory.innerHTML = '';
-  for (const opt of CATEGORY_OPTIONS) {
-    const o = document.createElement('option');
-    o.value = opt.value;
-    o.textContent = opt.label;
-    elDetailCategory.append(o);
-  }
-  elDetailCategory.value = value ?? '';
-}
-
-function renderEvidenceDetail(): void {
-  if (!currentCase || !selectedEvidenceId) {
-    elDetailEmpty.hidden = false;
-    elDetailBody.classList.add('detail-body--hidden');
-    return;
-  }
-  const ev = currentCase.evidence.find((e) => e.id === selectedEvidenceId);
-  if (!ev) {
-    elDetailEmpty.hidden = false;
-    elDetailBody.classList.add('detail-body--hidden');
-    return;
-  }
-
-  elDetailEmpty.hidden = true;
-  elDetailBody.classList.remove('detail-body--hidden');
-  elDetailTitle.textContent = ev.title;
-  elDetailMeta.textContent = `${formatDate(ev.dateTime)} · ${ev.provenance.tier} · ${ev.provenance.engineVersion ?? ''}`;
-  fillCategorySelect(ev.category);
-  elDetailText.textContent = ev.body;
-
-  const needsReview = ev.requiresUserReview;
-  elOcrWarning.classList.toggle('inline-warning--hidden', !needsReview);
-  btnConfirmReview.hidden = !needsReview;
-}
-
-// ── Render: gaps ───────────────────────────────────────────────────────────
-
-function renderGaps(): void {
-  if (!currentCase) return;
-  const gaps = detectGaps(currentCase);
-  setBadge(elGapsBadge, gaps.length);
-  setBadge(elNavGapsBadge, gaps.length);
-  elGapsList.innerHTML = '';
-
-  if (gaps.length === 0) {
-    elGapsEmpty.hidden = false;
-    return;
-  }
-  elGapsEmpty.hidden = true;
-
-  for (const gap of gaps) {
-    const li = document.createElement('li');
-    li.className = `gap-item gap-item--${gap.severity}`;
-    li.innerHTML = `
-      <span class="gap-item__name">${escHtml(gap.displayName)}</span>
-      <span class="gap-item__desc">${escHtml(gap.description)}</span>
-      <span class="gap-item__sev">${gap.severity}</span>`;
-    elGapsList.append(li);
-  }
-}
-
-// ── Render: law tab ────────────────────────────────────────────────────────
-
-const STATUS_DISPLAY: Record<string, string> = {
-  'researching': 'Researching',
-  'ready-to-discuss': 'Ready to discuss',
-  'resolved': 'Resolved',
-  'dropped': 'Dropped'
-};
-
-function renderClaimsList(): void {
-  if (!currentCase) return;
-  const { claims } = currentCase;
-  setBadge(elClaimsCount, claims.length);
-  elClaimsList.innerHTML = '';
-  if (claims.length === 0) {
-    elClaimsEmpty.hidden = false;
-    return;
-  }
-  elClaimsEmpty.hidden = true;
-  for (const claim of claims) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'item-btn';
-    btn.setAttribute('aria-current', claim.id === selectedClaimId ? 'true' : 'false');
-    btn.innerHTML = `
-      <span class="item-btn__title">${escHtml(claim.title)}</span>
-      <span class="item-btn__meta">
-        <span class="tag">${escHtml(STATUS_DISPLAY[claim.status] ?? claim.status)}</span>
-        ${claim.questions.length > 0 ? `<span class="tag">${claim.questions.length} question${claim.questions.length !== 1 ? 's' : ''}</span>` : ''}
-      </span>`;
-    btn.addEventListener('click', () => {
-      selectedClaimId = claim.id;
-      renderClaimDetail();
-      renderClaimsList();
-    });
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn-icon-del';
-    delBtn.setAttribute('aria-label', `Remove ${claim.title}`);
-    delBtn.textContent = '✕';
-    delBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      void onRemoveClaim(claim.id);
-    });
-    li.append(btn, delBtn);
-    elClaimsList.append(li);
-  }
-}
-
-function renderClaimDetail(): void {
-  if (!currentCase || !selectedClaimId) {
-    elClaimDetail.hidden = true;
-    return;
-  }
-  const claim = currentCase.claims.find((c) => c.id === selectedClaimId);
-  if (!claim) { elClaimDetail.hidden = true; return; }
-
-  elClaimDetail.hidden = false;
-  elClaimDetailBody.innerHTML = `
-    <p class="detail__title">${escHtml(claim.title)}</p>
-    <p class="muted detail__meta">Status: ${escHtml(STATUS_DISPLAY[claim.status] ?? claim.status)} · Confidence: ${escHtml(claim.confidence)}</p>
-    ${claim.description ? `<p>${escHtml(claim.description)}</p>` : ''}
-    ${claim.questions.length > 0 ? `
-      <p class="field__label">Questions to ask</p>
-      <ul class="questions-list">${claim.questions.map((q) => `<li>${escHtml(q)}</li>`).join('')}</ul>
-    ` : '<p class="muted">No questions yet.</p>'}
-    <div class="field add-question-row">
-      <label class="field__label" for="claim-question-input">Add a question</label>
-    </div>`;
-}
-
-function renderNotesList(): void {
-  if (!currentCase) return;
-  const { legalNotes } = currentCase;
-  setBadge(elNotesCount, legalNotes.length);
-  elNotesList.innerHTML = '';
-  if (legalNotes.length === 0) {
-    elNotesEmpty.hidden = false;
-    return;
-  }
-  elNotesEmpty.hidden = true;
-  for (const note of legalNotes) {
-    const li = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'item-btn';
-    btn.setAttribute('aria-current', note.id === selectedNoteId ? 'true' : 'false');
-    btn.innerHTML = `
-      <span class="item-btn__title">${escHtml(note.topic)}</span>
-      <span class="item-btn__meta">
-        <span class="tag">Applies: ${escHtml(note.appliesToCase)}</span>
-        ${note.source ? `<span class="muted" style="font-size:11px">${escHtml(note.source.slice(0, 40))}</span>` : ''}
-      </span>`;
-    btn.addEventListener('click', () => { selectedNoteId = note.id; renderNotesList(); });
-    const delBtn = document.createElement('button');
-    delBtn.type = 'button';
-    delBtn.className = 'btn-icon-del';
-    delBtn.setAttribute('aria-label', `Remove ${note.topic}`);
-    delBtn.textContent = '✕';
-    delBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      void onRemoveLegalNote(note.id);
-    });
-    li.append(btn, delBtn);
-    elNotesList.append(li);
-  }
-}
-
-// ── Render: export ─────────────────────────────────────────────────────────
-
-function renderExport(): void {
-  if (!currentCase) return;
-  const lat = currentCase.lastExportedAt;
-  elLastExported.textContent = lat
-    ? `Last exported: ${formatDateTime(lat)}`
-    : 'Not yet exported.';
-}
-
-// ── Main render ────────────────────────────────────────────────────────────
-
-function render(): void {
-  if (!currentCase) return;
-  renderReminder();
-
-  if (activeTab === 'inbox') {
-    renderUnreviewed();
-  } else if (activeTab === 'timeline') {
-    renderTimeline();
-  } else if (activeTab === 'evidence') {
-    renderEvidenceList();
-    renderEvidenceDetail();
-  } else if (activeTab === 'gaps') {
-    renderGaps();
-  } else if (activeTab === 'law') {
-    renderClaimsList();
-    renderClaimDetail();
-    renderNotesList();
-  } else if (activeTab === 'export') {
-    renderExport();
-  }
-
-  // Always keep gaps nav badge current
-  const gapCount = detectGaps(currentCase).length;
-  setBadge(elNavGapsBadge, gapCount);
-}
-
-// ── Action: image selected ─────────────────────────────────────────────────
-
-function onImageSelected(): void {
-  const file = inpImage.files?.[0];
-  if (!file) return;
-
-  // Auto-populate title with filename (strip extension)
-  if (!inpTitle.value.trim()) {
-    inpTitle.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-  }
-
-  // Auto-populate date from file last-modified if date not already set
-  if (!inpDate.value && file.lastModified) {
-    const d = new Date(file.lastModified);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    inpDate.value = `${yyyy}-${mm}-${dd}`;
-  }
-}
-
-// ── Action: add evidence ───────────────────────────────────────────────────
-
-async function onAddEvidence(e: Event): Promise<void> {
-  e.preventDefault();
-  const title = inpTitle.value.trim();
-  if (!title) {
-    inpTitle.focus();
-    return;
-  }
-
-  const rawDate = inpDate.value;
-  const dateTime = rawDate ? new Date(rawDate + 'T00:00:00') : new Date(NaN);
-  const body = inpBody.value.trim();
-  const hasImage = (inpImage.files?.length ?? 0) > 0;
-  const now = new Date();
-
-  const ev: Evidence = {
-    id: crypto.randomUUID(),
-    dateTime,
-    title,
-    body,
-    requiresUserReview: hasImage && !body,
-    provenance: { tier: 'manual', extractedAt: now, engineVersion: 'manual-v1' }
+function inferType(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    pdf: 'PDF',
+    docx: 'DOCX',
+    doc: 'DOC',
+    txt: 'TXT',
+    csv: 'CSV',
+    xml: 'XML',
+    jpg: 'Image',
+    jpeg: 'Image',
+    png: 'Image',
+    heic: 'Image',
+    webp: 'Image',
+    md: 'Markdown',
   };
-
-  if (!currentCase) return;
-  const updated: Case = { ...currentCase, evidence: [...currentCase.evidence, ev] };
-  await repo.saveEvidence(CASE_ID, updated.evidence);
-  currentCase = await repo.loadCase(CASE_ID) ?? updated;
-
-  inpTitle.value = '';
-  inpDate.value = '';
-  inpBody.value = '';
-  inpImage.value = '';
-  setStatus(`Added: ${title}`);
-  render();
+  return map[ext] ?? (ext.toUpperCase() || 'File');
 }
 
-// ── Action: batch import images ────────────────────────────────────────────
+// ── Navigation ─────────────────────────────────────────────────────────────────
 
-async function onBatchImport(input: HTMLInputElement): Promise<void> {
-  const files = input.files;
-  input.value = ''; // allow re-selecting same folder
-  if (!files || !currentCase) return;
+const SCREENS = ['screen-home', 'screen-brief', 'screen-library', 'screen-settings'];
 
-  const imageFiles = Array.from(files).filter((f) =>
-    /^image\/(jpeg|png|webp|heic|heif)$/i.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)
-  );
+function showScreen(id: string): void {
+  for (const sid of SCREENS) {
+    const el = document.getElementById(sid)!;
+    el.classList.toggle('active', sid === id);
+  }
+  const dock = document.getElementById('dock')!;
+  // Hide dock when inside brief
+  dock.style.display = id === 'screen-brief' ? 'none' : '';
 
-  if (imageFiles.length === 0) {
-    elBatchResult.textContent = 'No supported images found (JPEG, PNG, WebP, HEIC).';
+  // Update dock active state
+  document.querySelectorAll('.dock__item').forEach((btn) => {
+    const screen = (btn as HTMLElement).dataset.screen ?? '';
+    const targetId = screen === 'home' ? 'screen-home'
+      : screen === 'library' ? 'screen-library'
+      : screen === 'settings' ? 'screen-settings'
+      : '';
+    btn.classList.toggle('active', targetId === id);
+  });
+}
+
+// ── Home screen ────────────────────────────────────────────────────────────────
+
+async function loadHome(): Promise<void> {
+  allCases = await repo.listCases();
+  renderCaseList();
+  updateLibraryMeta();
+}
+
+function renderCaseList(): void {
+  const list = document.getElementById('case-list')!;
+  const empty = document.getElementById('case-list-empty')!;
+
+  if (allCases.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = '';
     return;
   }
+  empty.style.display = 'none';
+  list.innerHTML = allCases.map((c) => caseRowHTML(c)).join('');
 
-  elBatchResult.textContent = `Processing 0 of ${imageFiles.length}…`;
-
-  const newEvidence: Evidence[] = [];
-  const now = new Date();
-
-  for (let i = 0; i < imageFiles.length; i++) {
-    elBatchResult.textContent = `Processing ${i + 1} of ${imageFiles.length}…`;
-
-    const file = imageFiles[i];
-    const rawName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
-    const title = rawName || `Image ${i + 1}`;
-    const dateTime = file.lastModified ? new Date(file.lastModified) : new Date(NaN);
-
-    newEvidence.push({
-      id: crypto.randomUUID(),
-      dateTime,
-      title,
-      body: '',
-      requiresUserReview: true,
-      provenance: { tier: 'manual', extractedAt: now, engineVersion: 'batch-import-v1' }
+  // Attach click handlers
+  list.querySelectorAll('.case-row[data-case-id]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const id = (row as HTMLElement).dataset.caseId!;
+      openCase(id);
     });
+  });
+}
+
+function caseRowHTML(c: Case): string {
+  const gaps = detectGaps(c);
+  const statusClass = c.status === 'gaps' || gaps.length > 0 ? 'status--gaps' : 'status--ready';
+  const statusText = gaps.length > 0 ? `${gaps.length} gaps` : 'ready';
+  const categorySet = new Set(c.evidence.map((e) => e.category).filter(Boolean));
+  const cats = Array.from(categorySet).slice(0, 4).join(', ') || '—';
+  const meta = `${c.evidence.length} item${c.evidence.length !== 1 ? 's' : ''} · ${cats}`;
+  return `<div class="case-row" data-case-id="${esc(c.id)}">
+    <span class="case-row__icon">▸</span>
+    <div class="case-row__body">
+      <div class="case-row__name">${esc(c.title)}</div>
+      <div class="case-row__meta">${esc(meta)}</div>
+    </div>
+    <span class="case-row__status ${statusClass}">${esc(statusText)}</span>
+    <span class="case-row__arrow">›</span>
+  </div>`;
+}
+
+function updateLibraryMeta(): void {
+  const items = loadLibrary();
+  const meta = document.getElementById('library-meta')!;
+  meta.textContent = `${items.length} item${items.length !== 1 ? 's' : ''} · not yet assigned to a case`;
+}
+
+// ── Case Brief ─────────────────────────────────────────────────────────────────
+
+async function openCase(caseId: string): Promise<void> {
+  const c = await repo.loadCase(caseId);
+  if (!c) return;
+  currentCase = c;
+  renderBrief(c);
+  showScreen('screen-brief');
+}
+
+function renderBrief(c: Case): void {
+  // Topbar
+  (document.getElementById('brief-title')!).textContent = c.title;
+  const gaps = detectGaps(c);
+  const statusBadge = document.getElementById('brief-status-badge')!;
+  statusBadge.textContent = gaps.length > 0 ? `${gaps.length} gaps` : 'ready';
+  statusBadge.className = 'detail-status ' + (gaps.length > 0 ? 'status--gaps' : 'status--ready');
+
+  // Banner — show if case was auto-processed
+  const banner = document.getElementById('brief-banner')!;
+  banner.style.display = c.source && c.source !== 'manual' ? '' : 'none';
+
+  // Summary
+  const summaryEl = document.getElementById('brief-summary-text')!;
+  if (c.property?.address) {
+    summaryEl.textContent = `Tenant at ${c.property.address}${c.property.unit ? ', ' + c.property.unit : ''} — ${c.evidence.length} evidence items.`;
+  } else {
+    summaryEl.textContent = `${c.title} — ${c.evidence.length} evidence item${c.evidence.length !== 1 ? 's' : ''}, ${c.messages.length} message${c.messages.length !== 1 ? 's' : ''}.`;
   }
 
-  const updated: Case = { ...currentCase, evidence: [...currentCase.evidence, ...newEvidence] };
-  await repo.saveEvidence(CASE_ID, updated.evidence);
-  currentCase = await repo.loadCase(CASE_ID) ?? updated;
+  // Jurisdiction
+  const jurInput = document.getElementById('brief-jurisdiction') as HTMLInputElement;
+  jurInput.value = c.property?.jurisdiction ?? localStorage.getItem(JURISDICTION_KEY) ?? '';
+  jurInput.onchange = () => saveCaseField(c.id, 'jurisdiction', jurInput.value);
 
-  const n = newEvidence.length;
-  elBatchResult.textContent = `Added ${n} image${n !== 1 ? 's' : ''} to case. Open "Needs review" to add descriptions and check dates.`;
-  setStatus(`Batch import: ${n} image${n !== 1 ? 's' : ''} added`);
-  render();
+  // Claims
+  renderBriefClaims(c);
+
+  // Client goal
+  const goalEl = document.getElementById('brief-client-goal') as HTMLTextAreaElement;
+  goalEl.value = c.clientGoal ?? '';
+  goalEl.onchange = () => saveCaseField(c.id, 'clientGoal', goalEl.value);
+
+  // Timeline
+  renderBriefTimeline(c);
+
+  // Key facts
+  renderKeyFacts(c);
+
+  // Gaps
+  renderBriefGaps(c, gaps);
+
+  // Library refs
+  renderLibraryRefs(c);
+
+  // Source files
+  renderSourceFiles(c);
+
+  // Export bar meta
+  const exportMeta = document.getElementById('brief-export-meta')!;
+  exportMeta.textContent = `${c.evidence.length} item${c.evidence.length !== 1 ? 's' : ''} · ${gaps.length} gap${gaps.length !== 1 ? 's' : ''}`;
+
+  // Consult case label
+  const consultLabel = document.getElementById('consult-case-label')!;
+  consultLabel.textContent = c.title;
 }
 
-// ── Action: import CSV ─────────────────────────────────────────────────────
-
-async function onImportCsv(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = ''; // allow re-import of same file
-  if (!file || !currentCase) return;
-
-  elImportResult.textContent = 'Parsing…';
-  try {
-    const csvText = await readFileAsText(file);
-    const ownRaw = inpCfgOwn.value.trim();
-    const landlordRaw = inpCfgLandlord.value.trim();
-    const ownIdentifiers = ownRaw ? ownRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
-    const landlordIdentifiers = landlordRaw ? landlordRaw.split(',').map((s) => s.trim()).filter(Boolean) : [];
-
-    const parsed = parseImazingCsv(csvText, {
-      ownIdentifiers,
-      landlordIdentifiers,
-      logger: (msg) => console.warn('[iMazing CSV]', msg)
-    });
-
-    const { imported, skipped } = await persistMessages(parsed);
-    elImportResult.textContent = `Imported ${imported} message${imported !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)` : ''}.`;
-    setStatus(`Imported ${imported} messages from ${file.name}`);
-    render();
-  } catch (err) {
-    elImportResult.textContent = err instanceof Error ? err.message : 'Import failed.';
+async function saveCaseField(caseId: string, field: string, value: string): Promise<void> {
+  const c = await repo.loadCase(caseId);
+  if (!c) return;
+  if (field === 'clientGoal') {
+    c.clientGoal = value;
+  } else if (field === 'jurisdiction') {
+    if (!c.property) c.property = { address: '', unit: '', jurisdiction: '' };
+    c.property.jurisdiction = value;
+    localStorage.setItem(JURISDICTION_KEY, value);
   }
+  await repo.saveCase(c);
+  currentCase = c;
 }
 
-// ── Action: import XML ─────────────────────────────────────────────────────
-
-async function onImportXml(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file || !currentCase) return;
-
-  elImportResult.textContent = 'Parsing…';
-  try {
-    const xmlText = await readFileAsText(file);
-    const parsed = parseSmsXml(xmlText);
-    const { imported, skipped } = await persistMessages(parsed);
-    elImportResult.textContent = `Imported ${imported} message${imported !== 1 ? 's' : ''}${skipped > 0 ? ` (${skipped} duplicate${skipped !== 1 ? 's' : ''} skipped)` : ''}.`;
-    setStatus(`Imported ${imported} messages from ${file.name}`);
-    render();
-  } catch (err) {
-    elImportResult.textContent = err instanceof Error ? err.message : 'Import failed.';
+function renderBriefClaims(c: Case): void {
+  const list = document.getElementById('brief-claims-list')!;
+  const empty = document.getElementById('brief-claims-empty')!;
+  if (c.claims.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
   }
+  empty.style.display = 'none';
+  list.innerHTML = c.claims.map((cl) => `
+    <div class="claim-card">
+      <div class="claim-card__title">${esc(cl.title)}</div>
+      ${cl.description ? `<div class="claim-card__desc">${esc(cl.description)}</div>` : ''}
+      <span class="claim-card__status claim-status--${cl.status}">${esc(cl.status)}</span>
+    </div>
+  `).join('');
 }
 
-/** Deduplicate by dateTime+sender+body and persist unique messages. */
-async function persistMessages(incoming: Message[]): Promise<{ imported: number; skipped: number }> {
-  const existing = await repo.listMessages(CASE_ID);
-  const existingKeys = new Set(existing.map((m) => dedupKey(m)));
+function renderBriefTimeline(c: Case): void {
+  const container = document.getElementById('brief-timeline')!;
+  const empty = document.getElementById('brief-timeline-empty')!;
+  const timeline: TimelineItem[] = buildTimeline(c.evidence, c.messages);
 
-  const unique = incoming.filter((m) => !existingKeys.has(dedupKey(m)));
-  if (unique.length > 0) {
-    await repo.saveMessages(CASE_ID, unique);
-    currentCase = await repo.loadCase(CASE_ID);
+  if (timeline.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
   }
-  return { imported: unique.length, skipped: incoming.length - unique.length };
+  empty.style.display = 'none';
+  container.innerHTML = timeline.slice(0, 20).map((item) => {
+    const date = isFinite(item.dateTime.getTime())
+      ? item.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—';
+    const title = item.kind === 'evidence' ? item.title : `Message: ${item.body.slice(0, 60)}`;
+    const tag = item.kind === 'evidence' ? (item.category ?? '—') : 'message';
+    return `<div class="timeline-row">
+      <div class="timeline-dot"></div>
+      <div class="timeline-date">${esc(date)}</div>
+      <div class="timeline-event">${esc(title)}</div>
+      <div class="timeline-tag">${esc(tag)}</div>
+    </div>`;
+  }).join('');
 }
 
-function dedupKey(m: Message): string {
-  return `${m.dateTime.toISOString()}|${m.sender}|${m.body}`;
-}
+function renderKeyFacts(c: Case): void {
+  const container = document.getElementById('brief-key-facts')!;
+  const empty = document.getElementById('brief-key-facts-empty')!;
 
-// ── Action: category change ────────────────────────────────────────────────
+  // Extract dollar amounts and key dates from evidence
+  const facts: string[] = [];
+  const DOLLAR_RE = /\$[\d,]+(?:\.\d{2})?/g;
 
-async function onCategoryChange(): Promise<void> {
-  if (!currentCase || !selectedEvidenceId) return;
-  const category = elDetailCategory.value ? (elDetailCategory.value as EvidenceCategory) : undefined;
-  const updated = setEvidenceCategory(currentCase, selectedEvidenceId, category);
-  if (updated === currentCase) return;
-  currentCase = updated;
-  await repo.saveEvidence(CASE_ID, currentCase.evidence);
-  setStatus('Category saved.');
-  renderEvidenceList();
-  renderGaps();
-  setBadge(elNavGapsBadge, detectGaps(currentCase).length);
-}
-
-// ── Action: confirm OCR review ─────────────────────────────────────────────
-
-async function onConfirmReview(): Promise<void> {
-  if (!currentCase || !selectedEvidenceId) return;
-  const idx = currentCase.evidence.findIndex((e) => e.id === selectedEvidenceId);
-  if (idx === -1) return;
-
-  const updated: Evidence[] = currentCase.evidence.map((e, i) =>
-    i === idx ? { ...e, requiresUserReview: false } : e
-  );
-  currentCase = { ...currentCase, evidence: updated };
-  await repo.saveEvidence(CASE_ID, updated);
-  setStatus('Marked as reviewed.');
-  render();
-}
-
-// ── Action: export ─────────────────────────────────────────────────────────
-
-async function onExport(variant: 'fullCase' | 'lawyerSummary'): Promise<void> {
-  const assembled = await repo.loadCase(CASE_ID);
-  if (!assembled) { setStatus('No case to export.'); return; }
-
-  setStatus('Exporting…');
-  try {
-    const exportedAt = new Date();
-    const { markdown, case: afterShell } = await exportCaseMarkdown({
-      repo,
-      caseData: assembled,
-      variant,
-      exportedAt,
-      appVersion: APP_VERSION
-    });
-    const filename = exportFilename(variant === 'fullCase' ? 'full' : 'summary');
-    downloadMarkdown(filename, markdown);
-    currentCase = await repo.loadCase(CASE_ID) ??
-      { ...afterShell, evidence: assembled.evidence, messages: assembled.messages };
-    reminderDismissed = false; // fresh export clears session dismiss
-    setStatus(`Exported ${filename}`);
-    render();
-  } catch (err) {
-    setStatus(err instanceof Error ? err.message : 'Export failed.');
-  }
-}
-
-// ── Action: backup download ─────────────────────────────────────────────────
-
-async function onBackupDownload(): Promise<void> {
-  const assembled = await repo.loadCase(CASE_ID);
-  if (!assembled) { setStatus('No case to back up.'); return; }
-
-  setStatus('Preparing backup…');
-  try {
-    // Serialize dates to ISO strings so JSON round-trips cleanly
-    const payload = JSON.stringify({
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      case: {
-        ...assembled,
-        lastExportedAt: assembled.lastExportedAt?.toISOString() ?? null,
-        evidence: assembled.evidence.map(ev => ({
-          ...ev,
-          dateTime: Number.isFinite(ev.dateTime.getTime()) ? ev.dateTime.toISOString() : null,
-          provenance: { ...ev.provenance, extractedAt: ev.provenance.extractedAt.toISOString() }
-        })),
-        messages: assembled.messages.map(m => ({ ...m, dateTime: m.dateTime.toISOString() }))
+  for (const ev of c.evidence) {
+    const matches = ev.body.match(DOLLAR_RE);
+    if (matches) {
+      for (const m of matches.slice(0, 2)) {
+        facts.push(`${m} — ${ev.title}`);
       }
-    }, null, 2);
+    }
+  }
 
-    const d = new Date();
-    const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const filename = `case-backup-${stamp}.json`;
-    const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; document.body.appendChild(a);
-    a.click(); a.remove(); URL.revokeObjectURL(url);
-    setStatus(`Backup saved: ${filename}`);
+  // Also add tenancy info if present
+  if (c.tenancy?.monthlyRentCurrent) {
+    facts.unshift(`$${c.tenancy.monthlyRentCurrent.toLocaleString()} — current monthly rent`);
+  }
+  if (c.tenancy?.monthlyRentOriginal) {
+    facts.unshift(`$${c.tenancy.monthlyRentOriginal.toLocaleString()} — original monthly rent`);
+  }
+
+  if (facts.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  container.innerHTML = facts.slice(0, 8).map((f) =>
+    `<div class="fact-row"><span class="fact-row__arrow">›</span><span>${esc(f)}</span></div>`
+  ).join('');
+}
+
+function renderBriefGaps(c: Case, gaps: Gap[]): void {
+  const list = document.getElementById('brief-gaps-list')!;
+  const empty = document.getElementById('brief-gaps-empty')!;
+  if (gaps.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = gaps.map((g) => `
+    <div class="gap-row" data-gap-id="${esc(g.id)}">
+      <span class="gap-row__icon">△</span>
+      <div class="gap-row__body">
+        <strong>${esc(g.displayName)}</strong><br>
+        <span style="font-size:11px">${esc(g.description)}</span>
+        <button class="gap-row__action" data-gap-id="${esc(g.id)}" type="button">Mark resolved</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.gap-row__action').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // In a real app we'd persist resolved status; for now just re-render
+      const row = (btn as HTMLElement).closest('.gap-row') as HTMLElement;
+      row.style.opacity = '0.4';
+      (btn as HTMLElement).textContent = 'Resolved ✓';
+      (btn as HTMLButtonElement).disabled = true;
+    });
+  });
+}
+
+function renderLibraryRefs(c: Case): void {
+  const container = document.getElementById('brief-library-refs')!;
+  const empty = document.getElementById('brief-library-empty')!;
+  const refs = c.libraryRefs ?? [];
+  const library = loadLibrary();
+
+  if (refs.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  const items = refs.map((id) => library.find((li) => li.id === id)).filter(Boolean);
+  container.innerHTML = items.map((li) => `
+    <div class="lib-surface">
+      <span class="lib-surface__icon">📄</span>
+      <div class="lib-surface__body">
+        <div class="lib-surface__name">${esc(li!.name)}</div>
+        <div class="lib-surface__reason">From library</div>
+      </div>
+      <span class="lib-surface__cta">view ›</span>
+    </div>
+  `).join('');
+}
+
+function renderSourceFiles(c: Case): void {
+  const list = document.getElementById('brief-sources-list')!;
+  const label = document.getElementById('brief-sources-label')!;
+  label.textContent = `${c.evidence.length} file${c.evidence.length !== 1 ? 's' : ''}`;
+  list.innerHTML = c.evidence.map((ev) => {
+    const iconMap: Record<string, string> = {
+      photo: '📷', lease: '📄', payment: '💳', 'rent-notice': '📬',
+      'fee-notice': '⚠', repair: '🔧', message: '💬', amendment: '📝', other: '📄'
+    };
+    const icon = iconMap[ev.category ?? 'other'] ?? '📄';
+    const date = isFinite(ev.dateTime.getTime())
+      ? ev.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '—';
+    return `<div class="evidence-row">
+      <span class="evidence-row__icon">${icon}</span>
+      <span class="evidence-row__name">${esc(ev.title)}</span>
+      <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
+      <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
+    </div>`;
+  }).join('') || '<p class="lib-empty">No source files.</p>';
+}
+
+// ── File intake ────────────────────────────────────────────────────────────────
+
+async function handleFiles(files: FileList | File[], _source: Case['source']): Promise<void> {
+  const fileArr = Array.from(files);
+  if (fileArr.length === 0) return;
+  setIntakeStatus(`Processing ${fileArr.length} file${fileArr.length !== 1 ? 's' : ''}…`);
+  try {
+    const processed = await autoProcess(fileArr, {
+      existingCases: allCases,
+      repo,
+      source: _source,
+    });
+    await loadHome();
+    await openCase(processed.id);
+    setIntakeStatus('');
   } catch (err) {
-    setStatus(err instanceof Error ? err.message : 'Backup failed.');
+    setIntakeStatus(`Error: ${String(err)}`);
   }
 }
 
-// ── Action: backup restore ──────────────────────────────────────────────────
+function setIntakeStatus(msg: string): void {
+  const el = document.getElementById('intake-status');
+  if (el) el.textContent = msg;
+}
 
-async function onBackupRestore(e: Event): Promise<void> {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-  elBackupRestoreStatus.textContent = 'Reading file…';
+// ── Message import ─────────────────────────────────────────────────────────────
+
+async function handleMessageImport(file: File): Promise<void> {
+  const resultEl = document.getElementById('import-result')!;
   try {
     const text = await file.text();
-    const payload = JSON.parse(text) as {
-      version: number;
-      case: {
-        id: string;
-        title: string;
-        lastExportedAt: string | null;
-        evidence: Array<Record<string, unknown>>;
-        messages: Array<Record<string, unknown>>;
-        claims: Array<Record<string, unknown>>;
-        legalNotes: Array<Record<string, unknown>>;
-        lawyers: Array<Record<string, unknown>>;
-      };
-    };
-    if (payload.version !== 1 || !payload.case?.id) {
-      throw new Error('Unrecognised backup format.');
+    let messages;
+    if (file.name.toLowerCase().endsWith('.xml')) {
+      messages = parseSmsXml(text);
+    } else {
+      messages = parseImazingCsv(text);
     }
-    const c = payload.case;
-    // Re-hydrate dates
-    const restoredCase = {
-      ...c,
-      lastExportedAt: c.lastExportedAt ? new Date(c.lastExportedAt) : null,
-      evidence: (c.evidence as Array<{
-        dateTime: string | null;
-        provenance: { extractedAt: string; tier: string; engineVersion?: string };
-        [key: string]: unknown;
-      }>).map(ev => ({
-        ...ev,
-        dateTime: ev.dateTime ? new Date(ev.dateTime) : new Date(NaN),
-        provenance: { ...ev.provenance, extractedAt: new Date(ev.provenance.extractedAt) }
-      })),
-      messages: (c.messages as Array<{ dateTime: string; [key: string]: unknown }>).map(m => ({
-        ...m,
-        dateTime: new Date(m.dateTime)
-      })),
-      claims: c.claims,
-      legalNotes: c.legalNotes,
-      lawyers: c.lawyers
-    };
 
-    await repo.saveCase(restoredCase as Parameters<typeof repo.saveCase>[0]);
-    await repo.saveEvidence(c.id, restoredCase.evidence as Parameters<typeof repo.saveEvidence>[1]);
-    await repo.saveMessages(c.id, restoredCase.messages as Parameters<typeof repo.saveMessages>[1]);
-    await repo.saveClaims(c.id, restoredCase.claims as Parameters<typeof repo.saveClaims>[1]);
-    await repo.saveLegalNotes(c.id, restoredCase.legalNotes as Parameters<typeof repo.saveLegalNotes>[1]);
-    await repo.saveLawyers(c.id, restoredCase.lawyers as Parameters<typeof repo.saveLawyers>[1]);
-
-    currentCase = await repo.loadCase(CASE_ID);
-    elBackupRestoreStatus.textContent = `Restored. ${restoredCase.evidence.length} evidence items, ${restoredCase.messages.length} messages.`;
-    setStatus('Backup restored.');
-    render();
+    // Save to the current case or create a new one
+    let targetCase = currentCase;
+    if (!targetCase) {
+      targetCase = createCase({ title: 'Imported Messages' });
+      await repo.saveCase(targetCase);
+    }
+    await repo.saveMessages(targetCase.id, messages);
+    resultEl.textContent = `Imported ${messages.length} message${messages.length !== 1 ? 's' : ''}.`;
+    await loadHome();
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Restore failed.';
-    elBackupRestoreStatus.textContent = `Error: ${msg}`;
-    setStatus(msg);
-  } finally {
-    // Reset input so the same file can be re-selected if needed
-    inpBackupRestore.value = '';
+    resultEl.textContent = `Import failed: ${String(err)}`;
   }
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Consultation overlay ──────────────────────────────────────────────────────
 
-function escHtml(str: string): string {
+function openConsult(): void {
+  if (!currentCase) return;
+  consultSlide = 0;
+  renderConsultSlides(currentCase);
+  renderConsultSlide();
+  document.getElementById('consult-overlay')!.classList.add('active');
+}
+
+function closeConsult(): void {
+  document.getElementById('consult-overlay')!.classList.remove('active');
+}
+
+function nextSlide(): void {
+  consultSlide = Math.min(5, consultSlide + 1);
+  renderConsultSlide();
+}
+
+function prevSlide(): void {
+  consultSlide = Math.max(0, consultSlide - 1);
+  renderConsultSlide();
+}
+
+function renderConsultSlide(): void {
+  // Update active slide
+  document.querySelectorAll('.consult-slide').forEach((el, i) => {
+    el.classList.toggle('active', i === consultSlide);
+  });
+
+  // Update dots
+  document.querySelectorAll('.nav-dot').forEach((dot, i) => {
+    dot.classList.toggle('active', i === consultSlide);
+  });
+
+  // Update indicator
+  document.getElementById('consult-slide-indicator')!.textContent = `${consultSlide + 1} / 6`;
+
+  // Update progress bar
+  const fill = document.getElementById('consult-progress-fill')!;
+  fill.style.width = `${((consultSlide + 1) / 6) * 100}%`;
+
+  // Update buttons
+  const prevBtn = document.getElementById('consult-prev-btn') as HTMLButtonElement;
+  const nextBtn = document.getElementById('consult-next-btn') as HTMLButtonElement;
+  prevBtn.disabled = consultSlide === 0;
+
+  if (consultSlide === 5) {
+    nextBtn.textContent = 'Finish';
+    nextBtn.classList.add('c-btn--finish');
+    nextBtn.onclick = closeConsult;
+  } else {
+    nextBtn.textContent = 'Next →';
+    nextBtn.classList.remove('c-btn--finish');
+    nextBtn.onclick = nextSlide;
+  }
+}
+
+function renderConsultSlides(c: Case): void {
+  const gaps = detectGaps(c);
+  const timeline = buildTimeline(c.evidence, c.messages);
+
+  // Slide 1: Orientation grid
+  const orientGrid = document.getElementById('consult-orient-grid')!;
+  const evidenceCount = c.evidence.length;
+  const strengthBars = Math.min(5, Math.ceil(evidenceCount / 3));
+  const bars = Array.from({ length: 5 }, (_, i) =>
+    `<span class="sp${i < strengthBars ? ' on' : ''}"></span>`
+  ).join('');
+
+  orientGrid.innerHTML = `
+    <div class="orient-card">
+      <div class="orient-card__label">Case Type</div>
+      <div class="orient-card__value">Tenant–Landlord Dispute</div>
+    </div>
+    <div class="orient-card">
+      <div class="orient-card__label">Jurisdiction</div>
+      <div class="orient-card__value">${esc(c.property?.jurisdiction || 'Not specified')}</div>
+    </div>
+    <div class="orient-card orient-card--goal orient-card--wide">
+      <div class="orient-card__label">Client Goal</div>
+      <div class="orient-card__value">${esc(c.clientGoal || 'Not specified')}</div>
+    </div>
+    <div class="orient-card">
+      <div class="orient-card__label">Evidence Strength</div>
+      <div class="orient-card__value">${evidenceCount} item${evidenceCount !== 1 ? 's' : ''}
+        <div class="strength-bar">${bars}</div>
+      </div>
+    </div>
+    <div class="orient-card">
+      <div class="orient-card__label">Parties</div>
+      <div class="orient-card__value">
+        Tenant: ${esc(c.parties?.tenant || localStorage.getItem(TENANT_NAME_KEY) || '—')}<br>
+        Landlord: ${esc(c.parties?.landlord || '—')}
+      </div>
+    </div>
+  `;
+
+  // Slide 2: The Dispute
+  const disputeBody = document.getElementById('consult-dispute-body')!;
+  const summary = c.property?.address
+    ? `Tenant at ${c.property.address}${c.property.unit ? ', ' + c.property.unit : ''}.`
+    : c.title;
+  disputeBody.innerHTML = `
+    <div class="brief-summary">${esc(summary)}</div>
+    ${c.claims.length > 0 ? `
+      <div style="margin-top:12px">
+        ${c.claims.map((cl) => `<div class="claim-card" style="margin-bottom:6px">
+          <div class="claim-card__title">${esc(cl.title)}</div>
+        </div>`).join('')}
+      </div>
+    ` : '<p style="font-size:12px;color:#bbb">No discussion topics yet.</p>'}
+  `;
+
+  // Slide 3: The Proof
+  const proofBody = document.getElementById('consult-proof-body')!;
+  if (c.claims.length === 0) {
+    proofBody.innerHTML = '<p style="font-size:12px;color:#bbb">No discussion topics to show proof for.</p>';
+  } else {
+    proofBody.innerHTML = c.claims.map((cl) => `
+      <div class="legal-flag">
+        <div class="legal-flag__statute">${esc(cl.status)}</div>
+        <strong>${esc(cl.title)}</strong><br>
+        ${cl.description ? `<span>${esc(cl.description)}</span><br>` : ''}
+        ${cl.relatedEvidenceIds.length > 0
+          ? `<span style="font-size:10px;color:#888">${cl.relatedEvidenceIds.length} related evidence item${cl.relatedEvidenceIds.length !== 1 ? 's' : ''}</span>`
+          : ''}
+      </div>
+    `).join('');
+  }
+
+  // Slide 4: Timeline
+  const timelineBody = document.getElementById('consult-timeline-body')!;
+  if (timeline.length === 0) {
+    timelineBody.innerHTML = '<p style="font-size:12px;color:#bbb">No timeline items yet.</p>';
+  } else {
+    timelineBody.innerHTML = timeline.slice(0, 15).map((item) => {
+      const date = isFinite(item.dateTime.getTime())
+        ? item.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '—';
+      const title = item.kind === 'evidence' ? item.title : `Message: ${item.body.slice(0, 60)}`;
+      return `<div class="ct-row">
+        <div class="ct-dot"></div>
+        <div class="ct-date">${esc(date)}</div>
+        <div class="ct-body"><div class="ct-event">${esc(title)}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  // Slide 5: Gaps
+  const gapsBody = document.getElementById('consult-gaps-body')!;
+  if (gaps.length === 0) {
+    gapsBody.innerHTML = '<p style="font-size:12px;color:#1a7a3a">No gaps detected — case looks complete.</p>';
+  } else {
+    gapsBody.innerHTML = gaps.map((g) => `
+      <div class="consult-gap">
+        <div class="consult-gap__title">${esc(g.displayName)}</div>
+        <div class="consult-gap__q">Ask your lawyer: ${esc(g.description)}</div>
+      </div>
+    `).join('');
+  }
+
+  // Slide 6: Ready
+  const readyBody = document.getElementById('consult-ready-body')!;
+  const hasTimeline = timeline.length > 0;
+  const hasEvidence = c.evidence.length > 0;
+  const hasGoal = Boolean(c.clientGoal);
+  readyBody.innerHTML = `
+    <div class="ready-row${hasEvidence ? '' : ' ready-row--warn'}">
+      <span class="ready-row__icon">${hasEvidence ? '✓' : '△'}</span>
+      <span class="ready-row__text">${hasEvidence ? `${c.evidence.length} evidence items` : 'No evidence added yet'}</span>
+    </div>
+    <div class="ready-row${hasTimeline ? '' : ' ready-row--warn'}">
+      <span class="ready-row__icon">${hasTimeline ? '✓' : '△'}</span>
+      <span class="ready-row__text">${hasTimeline ? `Timeline: ${timeline.length} events` : 'No dated items in timeline'}</span>
+    </div>
+    <div class="ready-row${gaps.length === 0 ? '' : ' ready-row--warn'}">
+      <span class="ready-row__icon">${gaps.length === 0 ? '✓' : '△'}</span>
+      <span class="ready-row__text">${gaps.length === 0 ? 'No gaps detected' : `${gaps.length} gap${gaps.length !== 1 ? 's' : ''} to address`}</span>
+    </div>
+    <div class="ready-row${hasGoal ? '' : ' ready-row--warn'}">
+      <span class="ready-row__icon">${hasGoal ? '✓' : '△'}</span>
+      <span class="ready-row__text">${hasGoal ? 'Client goal set' : 'Client goal not specified'}</span>
+    </div>
+    <div class="consult-action-btns" style="margin-top:16px">
+      <button class="ca-btn ca-btn--primary" id="consult-export-btn" type="button">Export</button>
+      <button class="ca-btn" id="consult-share-btn" type="button">Share</button>
+    </div>
+  `;
+
+  document.getElementById('consult-export-btn')?.addEventListener('click', () => {
+    exportCurrentCase('fullCase');
+  });
+  document.getElementById('consult-share-btn')?.addEventListener('click', () => {
+    exportCurrentCase('lawyerSummary');
+  });
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────────
+
+async function exportCurrentCase(variant: 'fullCase' | 'lawyerSummary'): Promise<void> {
+  if (!currentCase) return;
+  try {
+    const result = await exportCaseMarkdown({
+      repo,
+      caseData: currentCase,
+      variant,
+      exportedAt: new Date(),
+      appVersion: '2.0.0',
+    });
+    const blob = new Blob([result.markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentCase.title.replace(/[^a-z0-9]/gi, '_')}_${variant}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    currentCase = result.case;
+  } catch (err) {
+    alert(`Export failed: ${err}`);
+  }
+}
+
+// ── Library screen ─────────────────────────────────────────────────────────────
+
+const LIBRARY_GROUPS = [
+  { key: 'tenant-rights', label: 'Tenant Rights' },
+  { key: 'ordinances', label: 'Ordinances' },
+  { key: 'templates', label: 'Templates' },
+  { key: 'correspondence', label: 'Correspondence' },
+  { key: 'research', label: 'Research' },
+  { key: 'unassigned', label: 'Unassigned' },
+];
+
+function inferGroup(_name: string): string {
+  const lower = _name.toLowerCase();
+  if (/tenant|renter|right/.test(lower)) return 'tenant-rights';
+  if (/ordinance|code|statute|law/.test(lower)) return 'ordinances';
+  if (/template|form|sample/.test(lower)) return 'templates';
+  if (/letter|email|notice|correspondence/.test(lower)) return 'correspondence';
+  if (/research|article|study/.test(lower)) return 'research';
+  return 'unassigned';
+}
+
+function renderLibrary(): void {
+  const items = loadLibrary();
+  const container = document.getElementById('lib-groups')!;
+
+  container.innerHTML = LIBRARY_GROUPS.map((g) => {
+    const groupItems = items.filter((li) => {
+      const gKey = inferGroup(li.name);
+      if (g.key === 'unassigned') {
+        return gKey === 'unassigned' || !LIBRARY_GROUPS.slice(0, -1).some((gg) => inferGroup(li.name) === gg.key);
+      }
+      return gKey === g.key;
+    });
+    return `<div class="lib-group">
+      <div class="lib-group__label">${esc(g.label)}</div>
+      ${groupItems.length === 0
+        ? '<p class="lib-empty">No items.</p>'
+        : groupItems.map((li) => `
+          <div class="lib-item">
+            <span class="lib-item__icon">📄</span>
+            <span class="lib-item__name">${esc(li.name)}</span>
+            <span class="lib-item__type">${esc(li.type)}</span>
+          </div>
+        `).join('')
+      }
+    </div>`;
+  }).join('');
+}
+
+// ── Settings screen ────────────────────────────────────────────────────────────
+
+function loadSettings(): void {
+  const jurEl = document.getElementById('settings-jurisdiction') as HTMLInputElement;
+  const tenantEl = document.getElementById('settings-tenant-name') as HTMLInputElement;
+  const exportEl = document.getElementById('settings-export-pref') as HTMLSelectElement;
+  jurEl.value = localStorage.getItem(JURISDICTION_KEY) ?? '';
+  tenantEl.value = localStorage.getItem(TENANT_NAME_KEY) ?? '';
+  exportEl.value = localStorage.getItem(EXPORT_PREF_KEY) ?? 'markdown';
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────────
+
+function esc(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -912,139 +729,160 @@ function escHtml(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// ── Action: add claim ──────────────────────────────────────────────────────
+// ── Bootstrap ──────────────────────────────────────────────────────────────────
 
-async function onAddClaim(e: Event): Promise<void> {
-  e.preventDefault();
-  const title = inpClaimTitle.value.trim();
-  if (!title || !currentCase) { inpClaimTitle.focus(); return; }
-  const claim = createClaim({
-    title,
-    description: inpClaimDesc.value.trim(),
-    status: (inpClaimStatus.value as Claim['status']) || 'researching'
-  });
-  currentCase = addClaim(currentCase, claim);
-  await repo.saveClaims(CASE_ID, currentCase.claims);
-  selectedClaimId = claim.id;
-  inpClaimTitle.value = '';
-  inpClaimDesc.value = '';
-  inpClaimStatus.value = 'researching';
-  setStatus(`Topic added: ${title}`);
-  renderClaimsList();
-  renderClaimDetail();
-}
+document.addEventListener('DOMContentLoaded', () => {
 
-async function onRemoveClaim(claimId: string): Promise<void> {
-  if (!currentCase) return;
-  currentCase = removeClaim(currentCase, claimId);
-  await repo.saveClaims(CASE_ID, currentCase.claims);
-  if (selectedClaimId === claimId) { selectedClaimId = null; }
-  setStatus('Topic removed.');
-  renderClaimsList();
-  renderClaimDetail();
-}
-
-async function onAddClaimQuestion(): Promise<void> {
-  if (!currentCase || !selectedClaimId) return;
-  const question = inpClaimQuestion.value.trim();
-  if (!question) return;
-  const existing = currentCase.claims.find((c) => c.id === selectedClaimId);
-  if (!existing) return;
-  currentCase = updateClaim(currentCase, selectedClaimId, {
-    questions: [...existing.questions, question]
-  });
-  await repo.saveClaims(CASE_ID, currentCase.claims);
-  inpClaimQuestion.value = '';
-  setStatus('Question added.');
-  renderClaimDetail();
-  renderClaimsList();
-}
-
-// ── Action: add legal note ─────────────────────────────────────────────────
-
-async function onAddLegalNote(e: Event): Promise<void> {
-  e.preventDefault();
-  const topic = inpNoteTopic.value.trim();
-  if (!topic || !currentCase) { inpNoteTopic.focus(); return; }
-  const note = createLegalNote({
-    topic,
-    summary: inpNoteSummary.value.trim(),
-    source: inpNoteSource.value.trim(),
-    appliesToCase: (inpNoteApplies.value as LegalNote['appliesToCase']) || 'maybe'
-  });
-  currentCase = addLegalNote(currentCase, note);
-  await repo.saveLegalNotes(CASE_ID, currentCase.legalNotes);
-  selectedNoteId = note.id;
-  inpNoteTopic.value = '';
-  inpNoteSummary.value = '';
-  inpNoteSource.value = '';
-  inpNoteApplies.value = 'maybe';
-  setStatus(`Note added: ${topic}`);
-  renderNotesList();
-}
-
-async function onRemoveLegalNote(noteId: string): Promise<void> {
-  if (!currentCase) return;
-  currentCase = removeLegalNote(currentCase, noteId);
-  await repo.saveLegalNotes(CASE_ID, currentCase.legalNotes);
-  if (selectedNoteId === noteId) selectedNoteId = null;
-  setStatus('Note removed.');
-  renderNotesList();
-}
-
-// ── Init ───────────────────────────────────────────────────────────────────
-
-async function init(): Promise<void> {
-  // Nav tabs
-  navBtns.forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset['tab'] as Tab));
+  // ── Dock navigation
+  document.querySelectorAll('.dock__item').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const screen = (btn as HTMLElement).dataset.screen ?? 'home';
+      if (screen === 'library') {
+        renderLibrary();
+        showScreen('screen-library');
+      } else if (screen === 'settings') {
+        loadSettings();
+        showScreen('screen-settings');
+      } else {
+        showScreen('screen-home');
+      }
+    });
   });
 
-  // Reminder dismiss (session-only)
-  btnReminderDismiss.addEventListener('click', () => {
-    reminderDismissed = true;
-    elReminder.classList.add('banner--hidden');
-    sessionStorage.setItem(REMINDER_DISMISSED_KEY, '1');
+  // ── Back buttons
+  document.getElementById('back-from-brief')!.addEventListener('click', () => {
+    currentCase = null;
+    showScreen('screen-home');
+  });
+  document.getElementById('back-from-library')!.addEventListener('click', () => {
+    showScreen('screen-home');
+  });
+  document.getElementById('back-from-settings')!.addEventListener('click', () => {
+    showScreen('screen-home');
   });
 
-  // Restore session dismiss state
-  if (sessionStorage.getItem(REMINDER_DISMISSED_KEY)) {
-    reminderDismissed = true;
-  }
+  // ── Library row on home
+  document.getElementById('btn-goto-library')!.addEventListener('click', () => {
+    renderLibrary();
+    showScreen('screen-library');
+  });
 
-  // Inbox form
-  formAddEvidence.addEventListener('submit', (e) => { void onAddEvidence(e); });
-  inpImage.addEventListener('change', onImageSelected);
-  inpCsv.addEventListener('change', (e) => { void onImportCsv(e); });
-  inpXml.addEventListener('change', (e) => { void onImportXml(e); });
-  inpFolder.addEventListener('change', () => { void onBatchImport(inpFolder); });
-  inpImages.addEventListener('change', () => { void onBatchImport(inpImages); });
+  // ── Intake toggle
+  document.getElementById('intake-toggle')!.addEventListener('click', () => {
+    const panel = document.getElementById('intake-panel')!;
+    panel.classList.toggle('open');
+  });
 
-  // Evidence detail
-  elDetailCategory.addEventListener('change', () => { void onCategoryChange(); });
-  btnConfirmReview.addEventListener('click', () => { void onConfirmReview(); });
+  // ── Drop folder
+  document.getElementById('intake-drop-folder')!.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length > 0) handleFiles(files, 'drop-folder');
+  });
 
-  // Law tab
-  formAddClaim.addEventListener('submit', (e) => { void onAddClaim(e); });
-  btnAddClaimQuestion.addEventListener('click', () => { void onAddClaimQuestion(); });
-  formAddNote.addEventListener('submit', (e) => { void onAddLegalNote(e); });
+  // ── Upload files
+  document.getElementById('intake-upload-files')!.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length > 0) handleFiles(files, 'upload');
+  });
 
-  // Export
-  btnExportFull.addEventListener('click', () => { void onExport('fullCase'); });
-  btnExportSummary.addEventListener('click', () => { void onExport('lawyerSummary'); });
-  btnBackupDownload.addEventListener('click', () => { void onBackupDownload(); });
-  inpBackupRestore.addEventListener('change', (e) => { void onBackupRestore(e); });
+  // ── Photo batch
+  document.getElementById('intake-photo-batch')!.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (files && files.length > 0) handleFiles(files, 'upload');
+  });
 
-  try {
-    currentCase = await ensureCase();
-    if (currentCase.evidence.length > 0) {
-      selectedEvidenceId = currentCase.evidence[0].id;
+  // ── Import messages button
+  document.getElementById('intake-messages-btn')!.addEventListener('click', () => {
+    const panel = document.getElementById('message-import-panel')!;
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  });
+
+  // ── CSV import
+  document.getElementById('import-csv')!.addEventListener('change', (e) => {
+    const file = ((e.target as HTMLInputElement).files)?.[0];
+    if (file) handleMessageImport(file);
+  });
+
+  // ── XML import
+  document.getElementById('import-xml')!.addEventListener('change', (e) => {
+    const file = ((e.target as HTMLInputElement).files)?.[0];
+    if (file) handleMessageImport(file);
+  });
+
+  // ── Manual entry button
+  document.getElementById('intake-manual-btn')!.addEventListener('click', () => {
+    if (currentCase) {
+      showScreen('screen-brief');
+    } else {
+      alert('Open or create a case first.');
     }
-    setStatus('Ready.');
-    render();
-  } catch (err) {
-    setStatus(err instanceof Error ? err.message : 'Failed to load storage.');
-  }
-}
+  });
 
-void init();
+  // ── Brief: Consult button
+  document.getElementById('btn-open-consult')!.addEventListener('click', openConsult);
+
+  // ── Brief: Export
+  document.getElementById('btn-export')!.addEventListener('click', () => {
+    exportCurrentCase('fullCase');
+  });
+
+  // ── Brief: Share
+  document.getElementById('btn-share')!.addEventListener('click', () => {
+    exportCurrentCase('lawyerSummary');
+  });
+
+  // ── Consult overlay navigation
+  document.getElementById('consult-exit-btn')!.addEventListener('click', closeConsult);
+  document.getElementById('consult-prev-btn')!.addEventListener('click', prevSlide);
+  document.getElementById('consult-next-btn')!.addEventListener('click', nextSlide);
+
+  document.querySelectorAll('.nav-dot').forEach((dot, i) => {
+    dot.addEventListener('click', () => {
+      consultSlide = i;
+      renderConsultSlide();
+    });
+  });
+
+  // ── Library: file upload
+  document.getElementById('lib-file-input')!.addEventListener('change', (e) => {
+    const files = (e.target as HTMLInputElement).files;
+    if (!files || files.length === 0) return;
+    const library = loadLibrary();
+    Array.from(files).forEach((file) => {
+      library.push({
+        id: crypto.randomUUID(),
+        name: file.name,
+        type: inferType(file.name),
+      });
+    });
+    saveLibrary(library);
+    renderLibrary();
+    updateLibraryMeta();
+    // Reset input
+    (e.target as HTMLInputElement).value = '';
+  });
+
+  // ── Settings: save on change
+  document.getElementById('settings-jurisdiction')!.addEventListener('change', (e) => {
+    localStorage.setItem(JURISDICTION_KEY, (e.target as HTMLInputElement).value);
+  });
+  document.getElementById('settings-tenant-name')!.addEventListener('change', (e) => {
+    localStorage.setItem(TENANT_NAME_KEY, (e.target as HTMLInputElement).value);
+  });
+  document.getElementById('settings-export-pref')!.addEventListener('change', (e) => {
+    localStorage.setItem(EXPORT_PREF_KEY, (e.target as HTMLSelectElement).value);
+  });
+
+  // ── Settings: reset
+  document.getElementById('btn-reset-cache')!.addEventListener('click', () => {
+    if (!confirm('This will delete ALL case data and settings. This cannot be undone.')) return;
+    localStorage.clear();
+    indexedDB.deleteDatabase('case-organizer');
+    window.location.reload();
+  });
+
+  // ── Initial load
+  loadHome().then(() => {
+    showScreen('screen-home');
+  });
+});
