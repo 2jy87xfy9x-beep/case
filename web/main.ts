@@ -262,10 +262,10 @@ function caseRowHTML(c: Case): string {
 
 function updateLibraryMeta(): void {
   const items = loadLibrary();
-  const meta = document.getElementById('library-meta')!;
+  const meta = document.getElementById('library-meta');
   const badge = document.getElementById('library-count-badge');
   const count = items.length;
-  meta.textContent = count === 0
+  if (meta) meta.textContent = count === 0
     ? 'Tenant rights, ordinances, templates, correspondence'
     : `${count} document${count !== 1 ? 's' : ''} · tenant rights, ordinances, templates`;
   if (badge) badge.textContent = count > 0 ? String(count) : '─';
@@ -1741,11 +1741,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('screen-home');
   });
 
-  // ── Library row on home
-  document.getElementById('btn-goto-library')!.addEventListener('click', () => {
-    renderLibrary();
-    showScreen('screen-library');
-  });
+  // ── Library row on home (element removed; navigation via dock only)
+
 
   // ── Intake toggle
   document.getElementById('intake-toggle')!.addEventListener('click', () => {
