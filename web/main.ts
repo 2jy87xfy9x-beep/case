@@ -8,6 +8,7 @@
 import { autoProcess, classifyFromContent } from '../app/application/autoProcess.js';
 import { extractExifDate } from '../app/application/extractExifDate.js';
 import { extractKeyFacts } from '../app/application/filterKeyFacts.js';
+import { preprocessImageForOcr } from '../app/application/preprocessImageForOcr.js';
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
 import { importScreenshotOcr } from '../app/application/importScreenshotOcr.js';
 import { createCase } from '../app/domain/factories.js';
@@ -34,8 +35,9 @@ async function getTesseractWorker() {
 function buildOcrService(): TieredOcrService {
   const engine = {
     async recognize(file: File) {
+      const processed = await preprocessImageForOcr(file);
       const worker = await getTesseractWorker();
-      const { data } = await worker.recognize(file);
+      const { data } = await worker.recognize(processed);
       return { text: data.text, confidence: data.confidence / 100 };
     }
   };
