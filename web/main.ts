@@ -16,7 +16,29 @@ import { parseSmsXml } from '../app/messages/parsers/smsXml.js';
 import { IndexedDbCaseRepository } from '../app/storage/IndexedDbCaseRepository.js';
 import { TieredOcrService } from '../app/ocr/tiered/index.js';
 import { TesseractOcrService } from '../app/ocr/tesseract/index.js';
-import type { Case, Gap, TimelineItem } from '../app/domain/types.js';
+import { createWorker } from 'tesseract.js';
+import type { Case, Evidence, EvidenceCategory, Gap, TimelineItem } from '../app/domain/types.js';
+
+// ── Real Tesseract engine (lazy-initialized, shared across calls) ──────────────
+
+let _tesseractWorker: Awaited<ReturnType<typeof createWorker>> | null = null;
+async function getTesseractWorker() {
+  if (!_tesseractWorker) {
+    _tesseractWorker = await createWorker('eng');
+  }
+  return _tesseractWorker;
+}
+
+function buildOcrService(): TieredOcrService {
+  const engine = {
+    async recognize(file: File) {
+      const worker = await getTesseractWorker();
+      const { data } = await worker.recognize(file);
+      return { text: data.text, confidence: data.confidence / 100 };
+    }
+  };
+  return new TieredOcrService({ tesseract: new TesseractOcrService(engine, () => new Date(), 120_000) });
+}
 
 // ── State ──────────────────────────────────────────────────────────────────────
 
@@ -121,6 +143,18 @@ function renderCaseList(): void {
       openCase(id);
     });
   });
+
+  // Delete case buttons
+  list.querySelectorAll('.case-row__delete').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.caseId!;
+      const c = allCases.find((x) => x.id === id);
+      if (!await showConfirm(`Delete "${c?.title ?? id}"?`, 'All evidence and documents in this case will be removed. This cannot be undone.')) return;
+      await repo.deleteCase(id);
+      await loadHome();
+    });
+  });
 }
 
 function caseRowHTML(c: Case): string {
@@ -137,6 +171,7 @@ function caseRowHTML(c: Case): string {
       <div class="case-row__meta">${esc(meta)}</div>
     </div>
     <span class="case-row__status ${statusClass}">${esc(statusText)}</span>
+    <button class="case-row__delete" data-case-id="${esc(c.id)}" type="button" data-tip="Delete case" style="background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:4px 8px;flex-shrink:0">×</button>
     <span class="case-row__arrow">›</span>
   </div>`;
 }
@@ -158,8 +193,33 @@ async function openCase(caseId: string): Promise<void> {
 }
 
 function renderBrief(c: Case): void {
-  // Topbar
-  (document.getElementById('brief-title')!).textContent = c.title;
+  // Topbar — click title to rename
+  const titleEl = document.getElementById('brief-title')!;
+  titleEl.textContent = c.title;
+  titleEl.title = 'Click to rename';
+  titleEl.style.cursor = 'text';
+  titleEl.onclick = () => {
+    if (titleEl.querySelector('input')) return; // already editing
+    const input = document.createElement('input');
+    input.value = c.title;
+    input.style.cssText = 'background:transparent;border:none;border-bottom:1px solid #4a90d9;color:inherit;font:inherit;width:100%;min-width:80px;outline:none;padding:0';
+    titleEl.textContent = '';
+    titleEl.appendChild(input);
+    input.focus();
+    input.select();
+    const save = async () => {
+      const newTitle = input.value.trim() || c.title;
+      c.title = newTitle;
+      titleEl.textContent = newTitle;
+      await repo.saveCase(c);
+      allCases = await repo.listCases();
+    };
+    input.onblur = save;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') input.blur();
+      if (e.key === 'Escape') { titleEl.textContent = c.title; }
+    };
+  };
   const gaps = detectGaps(c);
   const statusBadge = document.getElementById('brief-status-badge')!;
   statusBadge.textContent = gaps.length > 0 ? `${gaps.length} gaps` : 'ready';
@@ -369,22 +429,92 @@ function renderSourceFiles(c: Case): void {
   const list = document.getElementById('brief-sources-list')!;
   const label = document.getElementById('brief-sources-label')!;
   label.textContent = `${c.evidence.length} file${c.evidence.length !== 1 ? 's' : ''}`;
+  const iconMap: Record<string, string> = {
+    photo: '📷', lease: '📄', payment: '💳', 'rent-notice': '📬',
+    'fee-notice': '⚠', repair: '🔧', message: '💬', amendment: '📝', other: '📄'
+  };
   list.innerHTML = c.evidence.map((ev) => {
-    const iconMap: Record<string, string> = {
-      photo: '📷', lease: '📄', payment: '💳', 'rent-notice': '📬',
-      'fee-notice': '⚠', repair: '🔧', message: '💬', amendment: '📝', other: '📄'
-    };
     const icon = iconMap[ev.category ?? 'other'] ?? '📄';
     const date = isFinite(ev.dateTime.getTime())
       ? ev.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : '—';
-    return `<div class="evidence-row">
+    return `<div class="evidence-row" data-ev-id="${esc(ev.id)}" style="display:flex;align-items:center;gap:6px">
       <span class="evidence-row__icon">${icon}</span>
-      <span class="evidence-row__name">${esc(ev.title)}</span>
+      <span class="evidence-row__name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</span>
       <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
       <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
+      <button class="ev-edit-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Edit" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0">✏</button>
+      <button class="ev-delete-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Delete" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">×</button>
     </div>`;
   }).join('') || '<p class="lib-empty">No source files.</p>';
+
+  list.querySelectorAll('.ev-edit-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const ev = c.evidence.find((x) => x.id === evId);
+      if (ev) showEvidenceEditForm(ev, c.id);
+    });
+  });
+
+  list.querySelectorAll('.ev-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const ev = c.evidence.find((x) => x.id === evId);
+      if (!await showConfirm(`Delete "${ev?.title ?? 'this item'}"?`, 'This evidence item will be permanently removed from the case.')) return;
+      await repo.deleteEvidence(c.id, evId);
+      await openCase(c.id);
+    });
+  });
+}
+
+function showEvidenceEditForm(ev: Evidence, caseId: string): void {
+  document.getElementById('ev-edit-overlay')?.remove();
+  const cats: EvidenceCategory[] = ['lease', 'payment', 'rent-notice', 'fee-notice', 'repair', 'photo', 'message', 'amendment', 'other'];
+  const dateVal = isFinite(ev.dateTime.getTime()) ? ev.dateTime.toISOString().slice(0, 10) : '';
+  const catOptions = cats.map((cat) => `<option value="${cat}"${ev.category === cat ? ' selected' : ''}>${cat}</option>`).join('');
+  const field = (label: string, el: string) =>
+    `<label style="display:block;margin-bottom:4px;font-size:11px;color:#888;letter-spacing:.05em">${label}</label>${el}<div style="height:12px"></div>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ev-edit-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `<div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <strong style="color:#e8e8e8;font-size:14px">Edit Evidence</strong>
+      <button id="ev-edit-close" type="button" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    ${field('TITLE', `<input id="ev-edit-title" type="text" value="${esc(ev.title)}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
+    ${field('CATEGORY', `<select id="ev-edit-category" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">${catOptions}</select>`)}
+    ${field('DATE', `<input id="ev-edit-date" type="date" value="${dateVal}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
+    ${field('NOTES / OCR TEXT', `<textarea id="ev-edit-body" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:12px;height:100px;resize:vertical">${esc(ev.body)}</textarea>`)}
+    <div style="display:flex;gap:8px">
+      <button id="ev-edit-save" type="button" style="flex:1;background:#4a90d9;border:none;color:#fff;padding:10px;border-radius:4px;cursor:pointer;font-size:14px">Save</button>
+      <button id="ev-edit-cancel" type="button" style="flex:1;background:#2a2a2a;border:1px solid #444;color:#ccc;padding:10px;border-radius:4px;cursor:pointer;font-size:14px">Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  document.getElementById('ev-edit-close')!.onclick = close;
+  document.getElementById('ev-edit-cancel')!.onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+  document.getElementById('ev-edit-save')!.onclick = async () => {
+    const updated: Evidence = {
+      ...ev,
+      title: (document.getElementById('ev-edit-title') as HTMLInputElement).value.trim() || ev.title,
+      category: (document.getElementById('ev-edit-category') as HTMLSelectElement).value as EvidenceCategory,
+      dateTime: (document.getElementById('ev-edit-date') as HTMLInputElement).value
+        ? new Date((document.getElementById('ev-edit-date') as HTMLInputElement).value)
+        : ev.dateTime,
+      body: (document.getElementById('ev-edit-body') as HTMLTextAreaElement).value,
+    };
+    await repo.saveEvidence(caseId, [updated]);
+    close();
+    await openCase(caseId);
+  };
 }
 
 // ── File intake ────────────────────────────────────────────────────────────────
@@ -392,11 +522,12 @@ function renderSourceFiles(c: Case): void {
 async function handleFiles(files: FileList | File[], _source: Case['source']): Promise<void> {
   const fileArr = Array.from(files);
   if (fileArr.length === 0) return;
-  setIntakeStatus(`Processing ${fileArr.length} file${fileArr.length !== 1 ? 's' : ''}…`);
+  setIntakeStatus(`Reading ${fileArr.length} file${fileArr.length !== 1 ? 's' : ''}… (OCR may take a minute for photos)`);
   try {
     const processed = await autoProcess(fileArr, {
       existingCases: allCases,
       repo,
+      ocrService: buildOcrService(),
       source: _source,
     });
     await loadHome();
@@ -785,6 +916,29 @@ function esc(str: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function showConfirm(message: string, detail: string, confirmLabel = 'Delete', danger = true): Promise<boolean> {
+  return new Promise((resolve) => {
+    document.getElementById('app-confirm-backdrop')?.remove();
+    const backdrop = document.createElement('div');
+    backdrop.id = 'app-confirm-backdrop';
+    backdrop.className = 'app-confirm-backdrop';
+    backdrop.innerHTML = `
+      <div class="app-confirm-box">
+        <p>${esc(message)}</p>
+        <small>${esc(detail)}</small>
+        <div class="app-confirm-actions">
+          <button class="app-confirm-cancel" type="button">Cancel</button>
+          <button class="app-confirm-ok ${danger ? 'danger' : 'neutral'}" type="button">${esc(confirmLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const close = (result: boolean) => { backdrop.remove(); resolve(result); };
+    backdrop.querySelector('.app-confirm-cancel')!.addEventListener('click', () => close(false));
+    backdrop.querySelector('.app-confirm-ok')!.addEventListener('click', () => close(true));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(false); });
+  });
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -939,8 +1093,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Settings: reset
-  document.getElementById('btn-reset-cache')!.addEventListener('click', () => {
-    if (!confirm('This will delete ALL case data and settings. This cannot be undone.')) return;
+  document.getElementById('btn-reset-cache')!.addEventListener('click', async () => {
+    if (!await showConfirm('Reset all data?', 'Every case, document, and setting will be permanently deleted. This cannot be undone.', 'Reset everything', true)) return;
     localStorage.clear();
     indexedDB.deleteDatabase('case-organizer');
     window.location.reload();

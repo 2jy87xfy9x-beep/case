@@ -149,6 +149,34 @@ export class IndexedDbCaseRepository implements CaseRepository {
     return items.map(({ caseId: _id, ...lawyer }) => lawyer as Lawyer);
   }
 
+  async deleteCase(caseId: string): Promise<void> {
+    const db = await this.openDb();
+    const relatedStores = ['evidence', 'messages', 'claims', 'legalNotes', 'lawyers'] as const;
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['cases', ...relatedStores], 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('Transaction failed'));
+      tx.onabort = () => reject(tx.error ?? new Error('Transaction aborted'));
+      tx.objectStore('cases').delete(caseId);
+      for (const storeName of relatedStores) {
+        const req = tx.objectStore(storeName).index('caseId').openCursor(IDBKeyRange.only(caseId));
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) return;
+          cursor.delete();
+          cursor.continue();
+        };
+      }
+    });
+  }
+
+  async deleteEvidence(_caseId: string, evidenceId: string): Promise<void> {
+    const db = await this.openDb();
+    await transactionDone(db, ['evidence'], 'readwrite', (tx) => {
+      tx.objectStore('evidence').delete(evidenceId);
+    });
+  }
+
   async listCases(): Promise<Case[]> {
     const db = await this.openDb();
     const caseRecords = await transactionValue<PersistedCase[]>(db, ['cases'], 'readonly', (tx) =>

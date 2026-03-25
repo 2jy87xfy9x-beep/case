@@ -14,4 +14,6 @@ export interface CaseRepository {
   saveLawyers(caseId: string, lawyers: Lawyer[]): Promise<void>;
   listLawyers(caseId: string): Promise<Lawyer[]>;
   listCases(): Promise<Case[]>;
+  deleteCase(caseId: string): Promise<void>;
+  deleteEvidence(caseId: string, evidenceId: string): Promise<void>;
 }

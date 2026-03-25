@@ -214,6 +214,36 @@ export function assignToCase(meta: ExtractMetaResult, existingCases: Case[]): Ca
   return null;
 }
 
+// ─── classifyFromContent() ────────────────────────────────────────────────────
+
+/**
+ * Re-classify a photo based on OCR'd text content.
+ * Returns null if the text doesn't match any known document pattern.
+ */
+export function classifyFromContent(text: string): ClassifyResult | null {
+  if (text.trim().length < 30) return null;
+  const lower = text.toLowerCase();
+  if (/three[- ]day notice|notice to (leave|vacate)|non[- ]payment of rent|unlawful detainer|eviction/i.test(lower)) {
+    return { category: 'fee-notice', label: 'Fee / Legal Notice' };
+  }
+  if (/lease renewal|notice of rent increase|rent increase/i.test(lower)) {
+    return { category: 'rent-notice', label: 'Rent Increase Notice' };
+  }
+  if (/lease agreement|rental agreement|residential.*lease/i.test(lower)) {
+    return { category: 'lease', label: 'Lease / Rental Agreement' };
+  }
+  if (/nsf|returned check|insufficient funds|non-sufficient/i.test(lower)) {
+    return { category: 'payment', label: 'Payment Record' };
+  }
+  if (PAYMENT_KEYWORDS.test(lower)) {
+    return { category: 'payment', label: 'Payment Record' };
+  }
+  if (REPAIR_KEYWORDS.test(lower)) {
+    return { category: 'repair', label: 'Repair / Maintenance Record' };
+  }
+  return null;
+}
+
 // ─── autoProcess() ────────────────────────────────────────────────────────────
 
 export async function autoProcess(
@@ -222,14 +252,14 @@ export async function autoProcess(
 ): Promise<Case> {
   const { existingCases, repo, ocrService, source = 'upload' } = options;
 
-  const SKIP_OCR_CATEGORIES: EvidenceCategory[] = ['photo', 'message'];
+  const SKIP_OCR_CATEGORIES: EvidenceCategory[] = ['message'];
 
   // Step 1-4: Classify each file, optionally OCR, extract meta, create evidence
   const evidenceItems: Evidence[] = [];
   const allMetas: ExtractMetaResult[] = [];
 
   for (const file of files) {
-    const { category, label } = classify(file.name);
+    let { category, label } = classify(file.name);
 
     let body = '';
     let requiresUserReview = false;
@@ -241,6 +271,14 @@ export async function autoProcess(
       body = ocrResult.text;
       requiresUserReview = ocrResult.requiresUserReview;
       ocrTier = ocrResult.tier;
+      // Photo files: re-classify based on extracted text if content matches a document pattern
+      if (category === 'photo') {
+        const reclassified = classifyFromContent(body);
+        if (reclassified) {
+          category = reclassified.category;
+          label = reclassified.label;
+        }
+      }
     }
 
     const meta = extractMeta(file.name, body);

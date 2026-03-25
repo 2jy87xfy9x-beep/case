@@ -57,11 +57,9 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #34c759;
-  animation: pulse 2s infinite;
+  background: #aaa;
   flex-shrink: 0;
 }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 /* ── Canvas ────────────────────────────────────────────────────────────── */
 
@@ -917,3 +915,64 @@ body {
   line-height: 1.5;
 }
 .goal-textarea:focus { border-color: #888; }
+
+/* ── CSS Tooltips ──────────────────────────────────────────────────────── */
+
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  color: #e8e8e8;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 500;
+  border: 1px solid #333;
+}
+[data-tip]:hover::after { opacity: 1; }
+
+/* ── Styled confirm dialog ─────────────────────────────────────────────── */
+
+.app-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.app-confirm-box {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 20px 22px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 4px 20px rgba(0,0,0,.12);
+}
+.app-confirm-box p { margin: 0 0 4px; font-size: 14px; color: #111; font-weight: 500; line-height: 1.4; }
+.app-confirm-box small { display: block; margin-bottom: 16px; font-size: 12px; color: #888; }
+.app-confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.app-confirm-cancel {
+  background: none; border: 1px solid #ddd; color: #555;
+  padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.app-confirm-cancel:hover { border-color: #bbb; color: #111; }
+.app-confirm-ok {
+  border: none; color: #fff;
+  padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.app-confirm-ok.danger { background: #c0392b; }
+.app-confirm-ok.danger:hover { background: #a93226; }
+.app-confirm-ok.neutral { background: #555; }
+.app-confirm-ok.neutral:hover { background: #333; }
