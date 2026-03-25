@@ -1302,3 +1302,246 @@ a:focus-visible {
 .goal-textarea {
   user-select: text;
 }
+
+/* ── Archetype topic chips ────────────────────────────────────────────── */
+.archetype-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+.archetype-chip {
+  font-family: inherit;
+  font-size: 10px;
+  color: #666;
+  background: #fff;
+  border: 1px solid #ddd;
+  padding: 3px 9px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+.archetype-chip:hover { border-color: #888; color: #333; background: #fafafa; }
+.archetype-chip.active { border-color: #111; color: #111; background: #f0f0f0; }
+
+/* ── Archetype intake form ────────────────────────────────────────────── */
+.archetype-intake {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  padding: 12px;
+  margin-top: 8px;
+}
+.archetype-intake__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #333;
+  margin-bottom: 3px;
+}
+.archetype-intake__desc {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 6px;
+}
+.archetype-intake__statute {
+  font-size: 10px;
+  color: #aaa;
+  border-left: 2px solid #ddd;
+  padding-left: 7px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.intake-questions { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
+.intake-question__label {
+  display: block;
+  font-size: 10px;
+  color: #888;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+.intake-question__input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  padding: 5px 8px;
+  outline: none;
+  background: #fff;
+  color: #111;
+}
+.intake-question__input:focus { border-color: #888; }
+
+/* ── Gather checklist ─────────────────────────────────────────────────── */
+.gather-section {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.gather-section__title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+.gather-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.gather-item { font-size: 11px; color: #666; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; }
+.gather-check { color: #ccc; flex-shrink: 0; font-size: 12px; }
+
+.intake-actions { display: flex; gap: 8px; }
+.intake-submit-btn {
+  font-family: inherit;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.intake-submit-btn:hover { background: #333; }
+.intake-cancel-btn {
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  color: #888;
+  border: 1px solid #ddd;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.intake-cancel-btn:hover { border-color: #999; color: #555; }
+
+/* ── Claim card updates ────────────────────────────────────────────────── */
+.claim-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.claim-card__remove {
+  background: none;
+  border: none;
+  color: #ccc;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.claim-card__remove:hover { color: #888; }
+
+/* ── Library templates section ────────────────────────────────────────── */
+.lib-group--templates { margin-top: 16px; border-top: 1px solid #e8e8e8; padding-top: 12px; }
+.lib-item--template {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.lib-item--template:last-child { border-bottom: none; }
+.lib-item__body { flex: 1; min-width: 0; }
+.lib-item__desc { display: block; font-size: 10px; color: #aaa; margin-top: 1px; }
+.template-fill-btn {
+  font-family: inherit;
+  font-size: 10px;
+  background: none;
+  border: 1px solid #ddd;
+  color: #666;
+  padding: 3px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.template-fill-btn:hover { border-color: #999; color: #333; }
+
+/* ── Template fill modal ──────────────────────────────────────────────── */
+.template-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px 16px;
+  overflow-y: auto;
+}
+.template-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 520px;
+  padding: 20px;
+  position: relative;
+}
+.template-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.template-modal__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #111;
+}
+.template-modal__close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #aaa;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.template-modal__close:hover { color: #555; }
+.template-modal__desc {
+  font-size: 11px;
+  color: #aaa;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 10px;
+}
+.template-modal__fields { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.template-field__label {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 3px;
+}
+.template-field__input,
+.template-field__textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  outline: none;
+  background: #fff;
+  color: #111;
+  resize: vertical;
+}
+.template-field__input:focus,
+.template-field__textarea:focus { border-color: #888; }
+.template-modal__actions { display: flex; gap: 8px; }
+.template-generate-btn {
+  font-family: inherit;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.template-generate-btn:hover { background: #333; }
+.template-modal__cancel {
+  font-family: inherit;
+  font-size: 11px;
+  background: none;
+  color: #888;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.template-modal__cancel:hover { border-color: #999; color: #555; }

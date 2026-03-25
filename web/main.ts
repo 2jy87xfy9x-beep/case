@@ -64,6 +64,336 @@ const LIB_KEY = 'caseOrg.library';
 const JURISDICTION_KEY = 'caseOrg.jurisdiction';
 const TENANT_NAME_KEY = 'caseOrg.tenantName';
 const EXPORT_PREF_KEY = 'caseOrg.exportPref';
+const SETUP_DONE_KEY = 'caseOrg.setupDone';
+const DEFAULT_JURISDICTION = 'Warren, Ohio (Trumbull County)';
+
+// ── Topic archetypes ────────────────────────────────────────────────────────────
+
+interface TopicArchetype {
+  id: string;
+  label: string;
+  description: string;
+  questions: Array<{ id: string; label: string; placeholder: string }>;
+  gather: string[];
+  statute: string;
+}
+
+const TOPIC_ARCHETYPES: TopicArchetype[] = [
+  {
+    id: 'illegal-late-fees',
+    label: 'Illegal late fees',
+    description: 'Fees charged beyond what the lease allows, or applied unfairly.',
+    questions: [
+      { id: 'fee_amount', label: 'Amount charged', placeholder: 'e.g. $150' },
+      { id: 'fee_date', label: 'First charged on', placeholder: 'e.g. Jan 5, 2025' },
+      { id: 'lease_clause', label: 'What does your lease say about late fees?', placeholder: 'e.g. $50 after 5-day grace period' },
+      { id: 'occurrences', label: 'How many times has this occurred?', placeholder: 'e.g. 3 months in a row' },
+    ],
+    gather: [
+      'Signed lease agreement (late fee clause)',
+      'Rent payment receipts or bank records',
+      'Late fee notices from landlord',
+      'Written communications about fees (texts, emails, letters)',
+    ],
+    statute: 'Ohio requires late fees to be "reasonable" — no statutory cap, but courts can void excessive fees.',
+  },
+  {
+    id: 'habitability',
+    label: 'Habitability issues',
+    description: 'Landlord failure to maintain fit, safe, and livable conditions.',
+    questions: [
+      { id: 'issue_type', label: 'Type of issue', placeholder: 'e.g. no heat, mold, pest infestation, broken plumbing' },
+      { id: 'reported_date', label: 'Date first reported to landlord', placeholder: 'e.g. Oct 12, 2024' },
+      { id: 'landlord_response', label: "Landlord's response", placeholder: 'e.g. ignored, promised fix, partially repaired' },
+      { id: 'current_status', label: 'Current status', placeholder: 'e.g. still unresolved after 3 months' },
+    ],
+    gather: [
+      'Photos of the condition (with timestamps)',
+      'Written repair requests (emails, texts, certified letters)',
+      "Landlord responses or documentation of non-response",
+      'Health/code inspector reports if obtained',
+      'Medical records if health was affected',
+      'Lease agreement (habitability and repair clauses)',
+    ],
+    statute: 'ORC 5321.04 — landlord must maintain fit premises. ORC 5321.07 — after 30-day written notice, tenant may withhold rent or repair-and-deduct.',
+  },
+  {
+    id: 'security-deposit',
+    label: 'Security deposit dispute',
+    description: 'Deposit not returned, or improper deductions made.',
+    questions: [
+      { id: 'deposit_amount', label: 'Deposit amount paid', placeholder: 'e.g. $1,200' },
+      { id: 'move_in', label: 'Move-in date', placeholder: 'e.g. March 1, 2023' },
+      { id: 'move_out', label: 'Vacated / tenancy ended', placeholder: 'e.g. Nov 30, 2024' },
+      { id: 'deductions', label: 'Deductions claimed by landlord (if any)', placeholder: 'e.g. $800 cleaning, $200 paint' },
+    ],
+    gather: [
+      'Lease agreement (deposit clause)',
+      'Proof of deposit payment (check, money order, receipt)',
+      'Move-in inspection report or photos',
+      'Move-out inspection report or photos',
+      'Itemized deduction statement from landlord (if sent)',
+      'Documentation of forwarding address given to landlord',
+    ],
+    statute: 'ORC 5321.16 — landlord must return deposit within 30 days with itemized list. Failure = double deposit + attorney fees.',
+  },
+  {
+    id: 'rent-increase',
+    label: 'Rent increase validity',
+    description: 'Increase given without proper notice or in violation of lease terms.',
+    questions: [
+      { id: 'current_rent', label: 'Current rent', placeholder: 'e.g. $850/month' },
+      { id: 'new_rent', label: 'New rent demanded', placeholder: 'e.g. $1,100/month' },
+      { id: 'notice_date', label: 'Date notice received', placeholder: 'e.g. Dec 1, 2024' },
+      { id: 'notice_method', label: 'How was notice delivered?', placeholder: 'e.g. text message, letter taped to door' },
+    ],
+    gather: [
+      'Original lease agreement',
+      'Written rent increase notice',
+      'Lease renewal document (if applicable)',
+      'Payment history showing current rent amount',
+    ],
+    statute: 'Ohio has no rent control. Increase valid only at end of lease term with proper written notice per lease terms.',
+  },
+  {
+    id: 'wrongful-eviction',
+    label: 'Wrongful eviction',
+    description: 'Eviction filing without legal grounds, or improper procedure used.',
+    questions: [
+      { id: 'notice_type', label: 'Type of notice received', placeholder: 'e.g. 3-day, 30-day, no-cause' },
+      { id: 'notice_date', label: 'Date notice received', placeholder: 'e.g. Jan 10, 2025' },
+      { id: 'grounds', label: 'Stated reason for eviction', placeholder: 'e.g. non-payment, lease violation, retaliation' },
+      { id: 'payment_status', label: 'Are you current on rent?', placeholder: 'e.g. yes, paid through Feb with receipts' },
+    ],
+    gather: [
+      'Written eviction notice',
+      'Lease agreement',
+      'Rent payment receipts (all recent months)',
+      'Court summons (if eviction already filed)',
+      'Written communications with landlord',
+    ],
+    statute: 'ORC 1923 — forcible entry and detainer. Landlord must follow exact statutory process. Any procedural defect = dismissal.',
+  },
+];
+
+// ── Ohio library seeds ──────────────────────────────────────────────────────────
+
+const OHIO_LIBRARY_SEEDS: LibraryItem[] = [
+  { id: 'seed-orc-5321-02', name: 'ORC 5321.02 — Retaliatory conduct prohibited', type: 'Statute' },
+  { id: 'seed-orc-5321-04', name: 'ORC 5321.04 — Landlord obligations (fit and habitable premises)', type: 'Statute' },
+  { id: 'seed-orc-5321-07', name: 'ORC 5321.07 — Tenant remedies for landlord noncompliance (30-day notice)', type: 'Statute' },
+  { id: 'seed-orc-5321-16', name: 'ORC 5321.16 — Security deposit rules (30-day return, double damages)', type: 'Statute' },
+  { id: 'seed-orc-1923', name: 'ORC 1923 — Forcible entry and detainer (eviction procedure)', type: 'Statute' },
+  { id: 'seed-trumbull-court', name: 'Trumbull County Municipal Court — Housing and Eviction Division', type: 'Reference' },
+  { id: 'seed-warren-housing', name: 'Warren, OH City Code — Minimum Housing Standards', type: 'Ordinance' },
+];
+
+// ── Document templates ──────────────────────────────────────────────────────────
+
+interface DocumentTemplate {
+  id: string;
+  label: string;
+  description: string;
+  fields: Array<{ id: string; label: string; placeholder: string; caseField?: string }>;
+  generate: (f: Record<string, string>) => string;
+}
+
+const DOCUMENT_TEMPLATES: DocumentTemplate[] = [
+  {
+    id: 'repair-demand',
+    label: 'Repair Demand Letter',
+    description: 'Certified mail notice required before rent withholding (ORC 5321.07)',
+    fields: [
+      { id: 'tenant_name', label: 'Your name', placeholder: 'Jane Doe', caseField: 'tenantName' },
+      { id: 'tenant_address', label: 'Property address', placeholder: '123 Main St, Apt 2, Warren, OH 44481', caseField: 'address' },
+      { id: 'landlord_name', label: 'Landlord name', placeholder: 'John Smith' },
+      { id: 'landlord_address', label: 'Landlord mailing address', placeholder: '456 Oak Ave, Warren, OH 44481' },
+      { id: 'issue', label: 'Condition(s) needing repair', placeholder: 'No heat since Nov 1; mold in bathroom ceiling' },
+      { id: 'reported_date', label: 'Date first reported to landlord', placeholder: 'November 1, 2024' },
+      { id: 'letter_date', label: "Today's date", placeholder: 'March 1, 2025' },
+    ],
+    generate: (f) => `${f.letter_date}
+
+SENT VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+
+${f.landlord_name}
+${f.landlord_address}
+
+RE: Notice to Remedy Conditions — ${f.tenant_address}
+
+Dear ${f.landlord_name}:
+
+I am a tenant residing at ${f.tenant_address}. I am writing to formally notify you of the following conditions that violate your obligations under Ohio Revised Code § 5321.04:
+
+${f.issue}
+
+I first reported this issue on ${f.reported_date}. To date, the condition remains unresolved.
+
+Pursuant to ORC § 5321.07, this letter serves as written notice. If the condition is not remedied within thirty (30) days of receipt of this notice, I may exercise my legal remedies, which include depositing rent into court escrow, terminating the rental agreement, or pursuing damages.
+
+Please address this matter immediately.
+
+Sincerely,
+
+${f.tenant_name}
+${f.tenant_address}
+
+[KEEP A COPY OF THIS LETTER AND YOUR CERTIFIED MAIL RECEIPT]`,
+  },
+  {
+    id: 'deposit-demand',
+    label: 'Security Deposit Demand Letter',
+    description: 'Demand for return within 30 days — failure = double damages (ORC 5321.16)',
+    fields: [
+      { id: 'tenant_name', label: 'Your name', placeholder: 'Jane Doe', caseField: 'tenantName' },
+      { id: 'forwarding_address', label: 'Your current (forwarding) address', placeholder: '789 New St, Warren, OH 44481' },
+      { id: 'landlord_name', label: 'Landlord name', placeholder: 'John Smith' },
+      { id: 'landlord_address', label: 'Landlord mailing address', placeholder: '456 Oak Ave, Warren, OH 44481' },
+      { id: 'rental_address', label: 'Former rental address', placeholder: '123 Main St, Apt 2, Warren, OH 44481', caseField: 'address' },
+      { id: 'move_out', label: 'Date tenancy ended / you vacated', placeholder: 'January 31, 2025' },
+      { id: 'deposit_amount', label: 'Deposit amount paid', placeholder: '$1,200' },
+      { id: 'letter_date', label: "Today's date", placeholder: 'March 1, 2025' },
+    ],
+    generate: (f) => `${f.letter_date}
+
+SENT VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+
+${f.landlord_name}
+${f.landlord_address}
+
+RE: Demand for Return of Security Deposit — ${f.rental_address}
+
+Dear ${f.landlord_name}:
+
+I was a tenant at ${f.rental_address}. My tenancy ended on ${f.move_out}, at which time I vacated and surrendered possession of the premises.
+
+I paid a security deposit of ${f.deposit_amount}, which you continue to hold. My forwarding address is:
+
+  ${f.tenant_name}
+  ${f.forwarding_address}
+
+Pursuant to Ohio Revised Code § 5321.16, you are required to return my deposit — with an itemized written statement of any deductions — within thirty (30) days of the termination of my tenancy.
+
+Please return my deposit immediately. Be advised that failure to comply with ORC § 5321.16 entitles me to recover the amount wrongfully withheld PLUS damages equal to twice that amount, plus reasonable attorney's fees.
+
+Sincerely,
+
+${f.tenant_name}
+${f.forwarding_address}`,
+  },
+  {
+    id: 'habitability-complaint',
+    label: 'Habitability Complaint to Inspector',
+    description: 'Complaint to Warren code enforcement requesting official inspection',
+    fields: [
+      { id: 'tenant_name', label: 'Your name', placeholder: 'Jane Doe', caseField: 'tenantName' },
+      { id: 'tenant_address', label: 'Property address', placeholder: '123 Main St, Apt 2, Warren, OH 44481', caseField: 'address' },
+      { id: 'landlord_name', label: 'Landlord / property owner name', placeholder: 'John Smith' },
+      { id: 'issue', label: 'Conditions to be inspected', placeholder: 'No heat since November; visible mold in bathroom; broken window' },
+      { id: 'reported_date', label: 'Date reported to landlord', placeholder: 'November 1, 2024' },
+      { id: 'letter_date', label: "Today's date", placeholder: 'March 1, 2025' },
+    ],
+    generate: (f) => `${f.letter_date}
+
+City of Warren — Code Enforcement / Building & Housing Inspection
+391 Mahoning Ave NW
+Warren, OH 44483
+
+RE: Request for Housing Inspection — ${f.tenant_address}
+
+To Whom It May Concern:
+
+I am a tenant residing at ${f.tenant_address}. I am writing to request an official housing inspection of this property, owned/managed by ${f.landlord_name}.
+
+The following conditions exist which I believe violate Warren's minimum housing standards:
+
+${f.issue}
+
+I reported these conditions to my landlord on ${f.reported_date}. The landlord has failed to remedy the situation.
+
+I respectfully request that an inspector visit the property as soon as possible and issue any applicable orders to the property owner.
+
+Please contact me at the address above to schedule the inspection.
+
+Respectfully,
+
+${f.tenant_name}
+${f.tenant_address}`,
+  },
+  {
+    id: 'timeline-log',
+    label: 'Case Timeline Log',
+    description: 'Signed incident record formatted for court use',
+    fields: [
+      { id: 'tenant_name', label: 'Your name', placeholder: 'Jane Doe', caseField: 'tenantName' },
+      { id: 'address', label: 'Rental address', placeholder: '123 Main St, Apt 2, Warren, OH 44481', caseField: 'address' },
+      { id: 'landlord_name', label: 'Landlord name', placeholder: 'John Smith' },
+      { id: 'tenancy_start', label: 'Tenancy start date', placeholder: 'March 1, 2023' },
+      { id: 'events', label: 'Events (one per line: DATE — WHAT HAPPENED)', placeholder: 'Nov 1, 2024 — Reported broken heat via text\nNov 15, 2024 — No repair; followed up by text\nDec 1, 2024 — Still no heat; temp in unit 48°F' },
+    ],
+    generate: (f) => `CASE TIMELINE LOG
+Prepared by: ${f.tenant_name}
+Property: ${f.address}
+Landlord: ${f.landlord_name}
+Tenancy began: ${f.tenancy_start}
+Prepared: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+
+═══════════════════════════════════════════════════
+CHRONOLOGICAL EVENTS:
+
+${f.events.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => `${i + 1}. ${line.trim()}`).join('\n')}
+
+═══════════════════════════════════════════════════
+
+I declare under penalty of perjury that the foregoing is true and correct to the best of my knowledge.
+
+Signed: _______________________   Date: ___________
+${f.tenant_name}`,
+  },
+  {
+    id: 'rent-escrow',
+    label: 'Rent Escrow Notice',
+    description: 'Notice of intent to deposit rent into court escrow (ORC 5321.07)',
+    fields: [
+      { id: 'tenant_name', label: 'Your name', placeholder: 'Jane Doe', caseField: 'tenantName' },
+      { id: 'tenant_address', label: 'Property address', placeholder: '123 Main St, Apt 2, Warren, OH 44481', caseField: 'address' },
+      { id: 'landlord_name', label: 'Landlord name', placeholder: 'John Smith' },
+      { id: 'landlord_address', label: 'Landlord mailing address', placeholder: '456 Oak Ave, Warren, OH 44481' },
+      { id: 'issue', label: 'The unresolved condition', placeholder: 'No heat since November 1, 2024' },
+      { id: 'notice_date', label: 'Date your 30-day written notice was sent', placeholder: 'February 1, 2025' },
+      { id: 'escrow_month', label: "Month's rent being escrowed", placeholder: 'March 2025' },
+      { id: 'rent_amount', label: 'Monthly rent amount', placeholder: '$850' },
+      { id: 'letter_date', label: "Today's date", placeholder: 'March 1, 2025' },
+    ],
+    generate: (f) => `${f.letter_date}
+
+SENT VIA CERTIFIED MAIL — RETURN RECEIPT REQUESTED
+
+${f.landlord_name}
+${f.landlord_address}
+
+RE: Notice of Rent Deposit into Court Escrow — ${f.tenant_address}
+
+Dear ${f.landlord_name}:
+
+I am a tenant at ${f.tenant_address}. This letter notifies you that I have deposited my ${f.escrow_month} rent of ${f.rent_amount} into the Trumbull County Municipal Court escrow, pursuant to Ohio Revised Code § 5321.07(B).
+
+Background: On ${f.notice_date}, I provided you with written notice of the following unresolved condition at the rental property:
+
+${f.issue}
+
+More than thirty (30) days have elapsed since that notice. You have failed to remedy the condition. I am therefore exercising my right under ORC § 5321.07(B) to deposit rent with the court clerk rather than pay it to you directly.
+
+The court will hold the funds until this matter is resolved. You may petition the court for release of escrowed rent after demonstrating compliance.
+
+Sincerely,
+
+${f.tenant_name}
+${f.tenant_address}
+
+[ATTACH: Copy of original repair demand letter and certified mail receipt]`,
+  },
+];
 
 function loadLibrary(): LibraryItem[] {
   try {
@@ -269,6 +599,14 @@ function updateLibraryMeta(): void {
     ? 'Tenant rights, ordinances, templates, correspondence'
     : `${count} document${count !== 1 ? 's' : ''} · tenant rights, ordinances, templates`;
   if (badge) badge.textContent = count > 0 ? String(count) : '─';
+}
+
+function seedLibraryDefaults(): void {
+  const existing = loadLibrary();
+  const seededIds = new Set(existing.map((i) => i.id));
+  const toAdd = OHIO_LIBRARY_SEEDS.filter((s) => !seededIds.has(s.id));
+  if (toAdd.length === 0) return;
+  saveLibrary([...existing, ...toAdd]);
 }
 
 // ── Case Brief ─────────────────────────────────────────────────────────────────
@@ -535,69 +873,173 @@ async function saveCaseField(caseId: string, field: string, value: string): Prom
 function renderBriefClaims(c: Case): void {
   const list = document.getElementById('brief-claims-list')!;
   const empty = document.getElementById('brief-claims-empty')!;
+
   if (c.claims.length === 0) {
     list.innerHTML = '';
-    empty.style.display = '';
-    empty.innerHTML = `<strong>No discussion topics yet.</strong>
-      Discussion topics are things you want to ask a lawyer about. They appear automatically when the app detects relevant patterns in your evidence, or you can add one manually.
-      <div style="margin-top:8px">
-        <span style="font-size:10px;color:#aaa;display:block;margin-bottom:4px">Examples:</span>
-        <span class="claims-example" data-topic="Illegal late fees">Illegal late fees</span>
-        <span class="claims-example" data-topic="Habitability issues">Habitability issues</span>
-        <span class="claims-example" data-topic="Rent increase validity">Rent increase validity</span>
-        <span class="claims-example" data-topic="Security deposit dispute">Security deposit dispute</span>
+    empty.innerHTML = `
+      <strong>Add a discussion topic</strong>
+      <p style="margin:4px 0 10px;color:#999;font-size:11px">Select an issue type below to add context and see what to gather, or type a custom topic.</p>
+      <div class="archetype-grid" id="archetype-grid">
+        ${TOPIC_ARCHETYPES.map((a) => `
+          <button class="archetype-chip" data-archetype="${esc(a.id)}" type="button">${esc(a.label)}</button>
+        `).join('')}
       </div>
-      <div class="claims-add-row">
-        <input class="claims-add-input" id="claims-add-input" type="text" placeholder="Add a topic…" />
+      <div id="archetype-intake-area"></div>
+      <div class="claims-add-row" style="margin-top:10px">
+        <input class="claims-add-input" id="claims-add-input" type="text" placeholder="Or type a custom topic…" />
         <button class="claims-add-btn" id="claims-add-btn" type="button">Add</button>
       </div>`;
     empty.style.display = '';
 
-    // Wire up example topic clicks
-    empty.querySelectorAll('.claims-example').forEach((btn) => {
+    // Wire up archetype chip clicks
+    empty.querySelectorAll('.archetype-chip').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const input = document.getElementById('claims-add-input') as HTMLInputElement;
-        if (input) input.value = (btn as HTMLElement).dataset.topic ?? '';
-        input?.focus();
+        const archetypeId = (btn as HTMLElement).dataset.archetype ?? '';
+        showArchetypeIntake(archetypeId, c);
+        empty.querySelectorAll('.archetype-chip').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
       });
     });
 
-    // Wire up add button
+    // Wire up custom add button
     const addInput = document.getElementById('claims-add-input') as HTMLInputElement;
     const addBtn = document.getElementById('claims-add-btn');
     const doAdd = async () => {
       const topic = addInput?.value.trim();
       if (!topic) return;
-      const newClaim = {
-        id: crypto.randomUUID(),
-        title: topic,
-        description: '',
-        status: 'researching' as const,
-        confidence: 'low' as const,
-        relatedEvidenceIds: [],
-        relatedLegalNoteIds: [],
-        questions: []
-      };
-      const updated = await repo.loadCase(c.id);
-      if (!updated) return;
-      updated.claims = [...updated.claims, newClaim];
-      await repo.saveCase(updated);
-      currentCase = updated;
-      renderBriefClaims(updated);
-      showToast('Topic added');
+      await addClaim(c, topic, '');
     };
     addBtn?.addEventListener('click', doAdd);
     addInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doAdd(); });
     return;
   }
+
   empty.style.display = 'none';
   list.innerHTML = c.claims.map((cl) => `
     <div class="claim-card">
-      <div class="claim-card__title">${esc(cl.title)}</div>
+      <div class="claim-card__header">
+        <div class="claim-card__title">${esc(cl.title)}</div>
+        <button class="claim-card__remove" data-claim-id="${esc(cl.id)}" type="button" title="Remove topic">×</button>
+      </div>
       ${cl.description ? `<div class="claim-card__desc">${esc(cl.description)}</div>` : ''}
       <span class="claim-card__status claim-status--${cl.status}">${esc(cl.status)}</span>
     </div>
   `).join('');
+
+  // Wire up remove buttons
+  list.querySelectorAll('.claim-card__remove').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const claimId = (btn as HTMLElement).dataset.claimId!;
+      const updated = await repo.loadCase(c.id);
+      if (!updated) return;
+      updated.claims = updated.claims.filter((cl) => cl.id !== claimId);
+      await repo.saveCase(updated);
+      currentCase = updated;
+      renderBriefClaims(updated);
+      showToast('Topic removed');
+    });
+  });
+
+  // Always show add-more row below existing claims
+  const addMore = document.createElement('div');
+  addMore.style.cssText = 'margin-top:8px';
+  addMore.innerHTML = `
+    <div class="archetype-grid" id="archetype-grid-more">
+      ${TOPIC_ARCHETYPES.map((a) => `
+        <button class="archetype-chip" data-archetype="${esc(a.id)}" type="button">${esc(a.label)}</button>
+      `).join('')}
+    </div>
+    <div id="archetype-intake-area"></div>
+    <div class="claims-add-row" style="margin-top:8px">
+      <input class="claims-add-input" id="claims-add-input" type="text" placeholder="Or type a custom topic…" />
+      <button class="claims-add-btn" id="claims-add-btn" type="button">Add</button>
+    </div>`;
+  list.appendChild(addMore);
+
+  addMore.querySelectorAll('.archetype-chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const archetypeId = (btn as HTMLElement).dataset.archetype ?? '';
+      showArchetypeIntake(archetypeId, c);
+      addMore.querySelectorAll('.archetype-chip').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  const addInput2 = addMore.querySelector('#claims-add-input') as HTMLInputElement;
+  const addBtn2 = addMore.querySelector('#claims-add-btn');
+  addBtn2?.addEventListener('click', async () => {
+    const topic = addInput2?.value.trim();
+    if (!topic) return;
+    await addClaim(c, topic, '');
+  });
+  addInput2?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { addBtn2?.dispatchEvent(new Event('click')); } });
+}
+
+function showArchetypeIntake(archetypeId: string, c: Case): void {
+  const archetype = TOPIC_ARCHETYPES.find((a) => a.id === archetypeId);
+  const area = document.getElementById('archetype-intake-area');
+  if (!archetype || !area) return;
+
+  area.innerHTML = `
+    <div class="archetype-intake">
+      <div class="archetype-intake__title">${esc(archetype.label)}</div>
+      <div class="archetype-intake__desc">${esc(archetype.description)}</div>
+      <div class="archetype-intake__statute">${esc(archetype.statute)}</div>
+      <div class="intake-questions">
+        ${archetype.questions.map((q) => `
+          <div class="intake-question">
+            <label class="intake-question__label">${esc(q.label)}</label>
+            <input class="intake-question__input" id="iq-${esc(q.id)}" type="text" placeholder="${esc(q.placeholder)}" autocomplete="off" />
+          </div>
+        `).join('')}
+      </div>
+      <div class="gather-section">
+        <div class="gather-section__title">What to gather for this topic:</div>
+        <ul class="gather-list">
+          ${archetype.gather.map((item) => `<li class="gather-item"><span class="gather-check">☐</span> ${esc(item)}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="intake-actions">
+        <button class="intake-submit-btn" type="button">Add topic</button>
+        <button class="intake-cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  area.querySelector('.intake-submit-btn')!.addEventListener('click', async () => {
+    const answers = archetype.questions.map((q) => {
+      const val = (area.querySelector(`#iq-${q.id}`) as HTMLInputElement)?.value.trim();
+      return val ? `${q.label}: ${val}` : '';
+    }).filter(Boolean);
+    const description = answers.join(' · ');
+    await addClaim(c, archetype.label, description);
+  });
+
+  area.querySelector('.intake-cancel-btn')!.addEventListener('click', () => {
+    area.innerHTML = '';
+    document.querySelectorAll('.archetype-chip').forEach((b) => b.classList.remove('active'));
+  });
+
+  area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function addClaim(c: Case, title: string, description: string): Promise<void> {
+  const newClaim = {
+    id: crypto.randomUUID(),
+    title,
+    description,
+    status: 'researching' as const,
+    confidence: 'low' as const,
+    relatedEvidenceIds: [],
+    relatedLegalNoteIds: [],
+    questions: [],
+  };
+  const updated = await repo.loadCase(c.id);
+  if (!updated) return;
+  updated.claims = [...updated.claims, newClaim];
+  await repo.saveCase(updated);
+  currentCase = updated;
+  renderBriefClaims(updated);
+  showToast('Topic added');
 }
 
 function renderBriefTimeline(c: Case): void {
@@ -1582,10 +2024,10 @@ const LIBRARY_GROUPS = [
 function inferGroup(_name: string): string {
   const lower = _name.toLowerCase();
   if (/tenant|renter|right/.test(lower)) return 'tenant-rights';
-  if (/ordinance|code|statute|law/.test(lower)) return 'ordinances';
+  if (/ordinance|code|statute|law|orc /.test(lower)) return 'ordinances';
   if (/template|form|sample/.test(lower)) return 'templates';
   if (/letter|email|notice|correspondence/.test(lower)) return 'correspondence';
-  if (/research|article|study/.test(lower)) return 'research';
+  if (/research|article|study|court|municipal/.test(lower)) return 'research';
   return 'unassigned';
 }
 
@@ -1593,7 +2035,7 @@ function renderLibrary(): void {
   const items = loadLibrary();
   const container = document.getElementById('lib-groups')!;
 
-  container.innerHTML = LIBRARY_GROUPS.map((g) => {
+  const groupsHtml = LIBRARY_GROUPS.map((g) => {
     const groupItems = items.filter((li) => {
       const gKey = inferGroup(li.name);
       if (g.key === 'unassigned') {
@@ -1601,6 +2043,7 @@ function renderLibrary(): void {
       }
       return gKey === g.key;
     });
+    const isSeeded = (li: LibraryItem) => OHIO_LIBRARY_SEEDS.some((s) => s.id === li.id);
     return `<div class="lib-group">
       <div class="lib-group__label">${esc(g.label)}</div>
       ${groupItems.length === 0
@@ -1609,12 +2052,104 @@ function renderLibrary(): void {
           <div class="lib-item">
             <span class="lib-item__icon">📄</span>
             <span class="lib-item__name">${esc(li.name)}</span>
-            <span class="lib-item__type">${esc(li.type)}</span>
+            <span class="lib-item__type">${esc(li.type)}${isSeeded(li) ? ' · stub' : ''}</span>
           </div>
         `).join('')
       }
     </div>`;
   }).join('');
+
+  const templatesHtml = `
+    <div class="lib-group lib-group--templates">
+      <div class="lib-group__label">Fillable Templates</div>
+      <p style="font-size:11px;color:#aaa;margin:0 0 8px;line-height:1.5">Fill in your case details and download a ready-to-send document.</p>
+      ${DOCUMENT_TEMPLATES.map((t) => `
+        <div class="lib-item lib-item--template">
+          <span class="lib-item__icon">✎</span>
+          <div class="lib-item__body">
+            <span class="lib-item__name">${esc(t.label)}</span>
+            <span class="lib-item__desc">${esc(t.description)}</span>
+          </div>
+          <button class="template-fill-btn" data-template-id="${esc(t.id)}" type="button">Fill ↗</button>
+        </div>
+      `).join('')}
+    </div>`;
+
+  container.innerHTML = groupsHtml + templatesHtml;
+
+  // Wire template fill buttons
+  container.querySelectorAll('.template-fill-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const templateId = (btn as HTMLElement).dataset.templateId ?? '';
+      showTemplateModal(templateId);
+    });
+  });
+}
+
+function showTemplateModal(templateId: string): void {
+  const template = DOCUMENT_TEMPLATES.find((t) => t.id === templateId);
+  if (!template) return;
+
+  // Pre-fill from current case or settings
+  const prefill: Record<string, string> = {};
+  const tenantName = localStorage.getItem(TENANT_NAME_KEY) ?? '';
+  const address = currentCase?.property?.address
+    ? `${currentCase.property.address}${currentCase.property.unit ? ', ' + currentCase.property.unit : ''}`
+    : '';
+  if (tenantName) prefill['tenant_name'] = tenantName;
+  if (address) prefill['address'] = prefill['rental_address'] = prefill['tenant_address'] = address;
+
+  document.getElementById('template-modal-backdrop')?.remove();
+  const backdrop = document.createElement('div');
+  backdrop.id = 'template-modal-backdrop';
+  backdrop.className = 'template-modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="template-modal">
+      <div class="template-modal__header">
+        <span class="template-modal__title">${esc(template.label)}</span>
+        <button class="template-modal__close" type="button">×</button>
+      </div>
+      <div class="template-modal__desc">${esc(template.description)}</div>
+      <div class="template-modal__fields">
+        ${template.fields.map((f) => `
+          <div class="template-field">
+            <label class="template-field__label">${esc(f.label)}</label>
+            ${f.id === 'events' || f.id === 'issue'
+              ? `<textarea class="template-field__textarea" id="tf-${esc(f.id)}" placeholder="${esc(f.placeholder)}" rows="3">${esc(prefill[f.id] ?? '')}</textarea>`
+              : `<input class="template-field__input" id="tf-${esc(f.id)}" type="text" placeholder="${esc(f.placeholder)}" value="${esc(prefill[f.id] ?? '')}" autocomplete="off" />`
+            }
+          </div>
+        `).join('')}
+      </div>
+      <div class="template-modal__actions">
+        <button class="template-generate-btn" type="button">Generate &amp; Download</button>
+        <button class="template-modal__cancel" type="button">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(backdrop);
+
+  const close = () => backdrop.remove();
+  backdrop.querySelector('.template-modal__close')!.addEventListener('click', close);
+  backdrop.querySelector('.template-modal__cancel')!.addEventListener('click', close);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+
+  backdrop.querySelector('.template-generate-btn')!.addEventListener('click', () => {
+    const fields: Record<string, string> = {};
+    template.fields.forEach((f) => {
+      fields[f.id] = (backdrop.querySelector(`#tf-${f.id}`) as HTMLInputElement | HTMLTextAreaElement)?.value ?? '';
+    });
+    const content = template.generate(fields);
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${template.id}-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Document downloaded');
+    close();
+  });
 }
 
 // ── Settings screen ────────────────────────────────────────────────────────────
@@ -1885,6 +2420,15 @@ document.addEventListener('DOMContentLoaded', () => {
       showCanvasFilter(filters[nextIdx]);
     }
   });
+
+  // ── First-launch setup defaults
+  if (!localStorage.getItem(SETUP_DONE_KEY)) {
+    if (!localStorage.getItem(JURISDICTION_KEY)) {
+      localStorage.setItem(JURISDICTION_KEY, DEFAULT_JURISDICTION);
+    }
+    seedLibraryDefaults();
+    localStorage.setItem(SETUP_DONE_KEY, '1');
+  }
 
   // ── Initial load
   loadHome().then(async () => {
