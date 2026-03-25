@@ -48,8 +48,13 @@ describe('classify()', () => {
     expect(result.category).toBe('photo');
   });
 
-  it('classifies message by extension (.csv when no payment keyword)', () => {
+  it('classifies message by extension (.xml when no payment keyword)', () => {
     const result = classify('sms-backup.xml');
+    expect(result.category).toBe('message');
+  });
+
+  it('classifies message by extension (.csv when no payment keyword)', () => {
+    const result = classify('sms-export.csv');
     expect(result.category).toBe('message');
   });
 
@@ -321,6 +326,23 @@ describe('autoProcess() integration', () => {
       isAvailable: () => true
     };
     const files = [makeFile('photo.jpg', 'image/jpeg')];
+    await autoProcess(files, { existingCases: [], repo, ocrService });
+    expect(ocrService.extractText).not.toHaveBeenCalled();
+  });
+
+  it('does not call OCR service for message files', async () => {
+    const repo = makeMockRepo();
+    const ocrService: OcrService = {
+      extractText: vi.fn().mockResolvedValue({
+        text: '',
+        tier: 'manual',
+        requiresUserReview: false,
+        confidence: 'high',
+        extractedAt: new Date()
+      }),
+      isAvailable: () => true
+    };
+    const files = [makeFile('sms-export.csv')];
     await autoProcess(files, { existingCases: [], repo, ocrService });
     expect(ocrService.extractText).not.toHaveBeenCalled();
   });
