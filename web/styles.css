@@ -998,3 +998,29 @@ body {
   letter-spacing: 0.05em; flex-shrink: 0;
 }
 .ocr-toggle:hover { color: #555; }
+
+/* ── Needs Review section ──────────────────────────────────────────────── */
+.review-badge {
+  background: #b85c00;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.04em;
+}
+.review-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff8f0;
+  border: 1px solid #f0d9b5;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.review-row__label { flex: 1; color: #555; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.review-row__reason { font-size: 10px; color: #b85c00; flex-shrink: 0; }
+.review-row__edit { background: none; border: 1px solid #ccc; color: #333; padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; flex-shrink: 0; font-family: inherit; }
+.review-row__edit:hover { border-color: #888; }

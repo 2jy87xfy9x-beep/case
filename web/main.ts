@@ -264,6 +264,7 @@ function renderBrief(c: Case): void {
 
   // Source files
   renderSourceFiles(c);
+  renderNeedsReview(c);
 
   // Export bar meta
   const exportMeta = document.getElementById('brief-export-meta')!;
@@ -487,6 +488,45 @@ function renderSourceFiles(c: Case): void {
       if (!await showConfirm(`Delete "${ev?.title ?? 'this item'}"?`, 'This evidence item will be permanently removed from the case.')) return;
       await repo.deleteEvidence(c.id, evId);
       await openCase(c.id);
+    });
+  });
+}
+
+function renderNeedsReview(c: Case): void {
+  const section = document.getElementById('brief-review-section')!;
+  const list = document.getElementById('brief-review-list')!;
+  const badge = document.getElementById('brief-review-badge')!;
+
+  const reviewItems = c.evidence.filter(
+    (ev) => ev.requiresUserReview && (ev.body.trim().length < 50 || ev.category === 'photo')
+  );
+
+  if (reviewItems.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = '';
+  badge.textContent = String(reviewItems.length);
+
+  list.innerHTML = reviewItems.map((ev) => {
+    const reason = ev.body.trim().length < 10
+      ? 'No text extracted'
+      : ev.body.trim().length < 50
+      ? 'Too little text to classify'
+      : 'Could not identify document type';
+    return `<div class="review-row" data-ev-id="${esc(ev.id)}">
+      <span class="review-row__label" title="${esc(ev.title)}">${esc(ev.title)}</span>
+      <span class="review-row__reason">${esc(reason)}</span>
+      <button class="review-row__edit" data-ev-id="${esc(ev.id)}" type="button">Edit ✏</button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.review-row__edit').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const ev = c.evidence.find((x) => x.id === evId);
+      if (ev) showEvidenceEditForm(ev, c.id);
     });
   });
 }
