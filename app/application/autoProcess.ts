@@ -143,26 +143,26 @@ export function extractMeta(filename: string, text: string): ExtractMetaResult {
   let date: Date | null = null;
   const isoMatch = combined.match(ISO_DATE_RE);
   if (isoMatch) {
-    // Use local date constructor so getDate()/getMonth() return the parsed values
-    date = new Date(
-      parseInt(isoMatch[1], 10),
-      parseInt(isoMatch[2], 10) - 1,
-      parseInt(isoMatch[3], 10)
-    );
-  } else {
+    const year = parseInt(isoMatch[1], 10);
+    if (year >= 1970 && year <= 2099) {
+      date = new Date(year, parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10));
+    }
+  }
+  if (!date) {
     const usMatch = combined.match(US_DATE_RE);
     if (usMatch) {
-      date = new Date(
-        parseInt(usMatch[3], 10),
-        parseInt(usMatch[1], 10) - 1,
-        parseInt(usMatch[2], 10)
-      );
-    } else {
-      const wmMatch = combined.match(WRITTEN_MONTH_RE);
-      if (wmMatch) {
-        const monthIndex = MONTHS[wmMatch[1].toLowerCase()];
-        const year = parseInt(wmMatch[2], 10);
-        date = new Date(year, monthIndex, 1);
+      const year = parseInt(usMatch[3], 10);
+      if (year >= 1970 && year <= 2099) {
+        date = new Date(year, parseInt(usMatch[1], 10) - 1, parseInt(usMatch[2], 10));
+      }
+    }
+  }
+  if (!date) {
+    const wmMatch = combined.match(WRITTEN_MONTH_RE);
+    if (wmMatch) {
+      const year = parseInt(wmMatch[2], 10);
+      if (year >= 1970 && year <= 2099) {
+        date = new Date(year, MONTHS[wmMatch[1].toLowerCase()], 1);
       }
     }
   }
@@ -220,15 +220,39 @@ export function assignToCase(meta: ExtractMetaResult, existingCases: Case[]): Ca
 /**
  * Re-classify a photo based on OCR'd text content.
  * Returns null if the text doesn't match any known document pattern.
+ *
+ * Strategy: check the document header (first 400 chars) first for strong
+ * type signals. This prevents a lease that mentions "eviction" in its clauses
+ * from being mis-classified as a fee-notice.
  */
 export function classifyFromContent(text: string): ClassifyResult | null {
   if (text.trim().length < 30) return null;
-  const lower = text.toLowerCase();
-  if (/three[- ]day notice|notice to (leave|vacate)|non[- ]payment of rent|unlawful detainer|eviction/i.test(lower)) {
-    return { category: 'fee-notice', label: 'Fee / Legal Notice' };
+
+  // ── 1. Header-first detection (first 400 chars) ─────────────────────────
+  const header = text.slice(0, 400);
+  const headerLower = header.toLowerCase();
+
+  if (/three[- ]day notice|notice to (leave|vacate)/i.test(header)) {
+    return { category: 'fee-notice', label: extractDocTitle(text, '3-Day Notice to Leave') };
   }
-  if (/lease renewal|notice of rent increase|rent increase/i.test(lower)) {
-    return { category: 'rent-notice', label: 'Rent Increase Notice' };
+  if (/lease renewal notification|notice of rent increase/i.test(header)) {
+    return { category: 'rent-notice', label: extractDocTitle(text, 'Rent Increase Notice') };
+  }
+  if (/residential rental[/\\]?lease|lease agreement|rental[/\\]?lease agreement/i.test(header)) {
+    return { category: 'lease', label: extractDocTitle(text, 'Lease / Rental Agreement') };
+  }
+  if (/non[- ]payment of rent|notice to pay/i.test(headerLower)) {
+    return { category: 'fee-notice', label: extractDocTitle(text, 'Fee / Legal Notice') };
+  }
+
+  // ── 2. Full-text search (lower priority, avoids cross-contamination) ─────
+  const lower = text.toLowerCase();
+
+  if (/three[- ]day notice|notice to (leave|vacate)|non[- ]payment of rent|unlawful detainer/i.test(lower)) {
+    return { category: 'fee-notice', label: extractDocTitle(text, 'Fee / Legal Notice') };
+  }
+  if (/rent increase|notice of rent/i.test(lower)) {
+    return { category: 'rent-notice', label: extractDocTitle(text, 'Rent Increase Notice') };
   }
   if (/lease agreement|rental agreement|residential.*lease/i.test(lower)) {
     return { category: 'lease', label: 'Lease / Rental Agreement' };
@@ -243,6 +267,27 @@ export function classifyFromContent(text: string): ClassifyResult | null {
     return { category: 'repair', label: 'Repair / Maintenance Record' };
   }
   return null;
+}
+
+/**
+ * Extract a human-readable title from OCR text by scanning the first 15 lines
+ * for an all-caps or title-case header line with sufficient alpha content.
+ */
+function extractDocTitle(text: string, fallback: string): string {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length >= 8 && l.length <= 80);
+  for (const line of lines.slice(0, 15)) {
+    const alphaCount = (line.match(/[a-zA-Z]/g) ?? []).length;
+    if (alphaCount / line.length < 0.5) continue;
+    // Accept ALL-CAPS lines (document headers)
+    if (/^[A-Z][A-Z\s\-\/()'".,0-9]+$/.test(line) && alphaCount >= 5) {
+      return line.replace(/\s+/g, ' ').slice(0, 60);
+    }
+    // Accept Title Case multi-word phrases
+    if (/^([A-Z][a-z]+\s){2,}/.test(line)) {
+      return line.replace(/\s+/g, ' ').slice(0, 60);
+    }
+  }
+  return fallback;
 }
 
 // ─── autoProcess() ────────────────────────────────────────────────────────────
@@ -297,6 +342,7 @@ export async function autoProcess(
       dateTime: meta.date ?? new Date(NaN),
       category,
       requiresUserReview,
+      sourceFile: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
       provenance: { tier: ocrTier, extractedAt }
     });
     evidenceItems.push(ev);

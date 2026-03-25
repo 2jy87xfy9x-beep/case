@@ -31,6 +31,10 @@ export interface Evidence {
   requiresUserReview: boolean;
   /** When unset, the item is treated as uncategorized for gap rules. */
   category?: EvidenceCategory;
+  /** Original filename or webkitRelativePath at upload time. */
+  sourceFile?: string;
+  /** Base64 data URL of a 200px thumbnail (images only). */
+  thumbnail?: string;
   provenance: {
     tier: OcrMethod;
     extractedAt: Date;

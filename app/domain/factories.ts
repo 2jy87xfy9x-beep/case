@@ -18,9 +18,11 @@ export function createEvidence(input: {
   dateTime?: Date;
   category?: EvidenceCategory;
   requiresUserReview?: boolean;
+  sourceFile?: string;
+  thumbnail?: string;
   provenance?: { tier: OcrMethod; extractedAt: Date; engineVersion?: string };
 }): Evidence {
-  return {
+  const ev: Evidence = {
     id: input.id ?? randomUUID(),
     title: input.title,
     body: input.body ?? '',
@@ -29,6 +31,9 @@ export function createEvidence(input: {
     requiresUserReview: input.requiresUserReview ?? false,
     provenance: input.provenance ?? { tier: 'manual', extractedAt: new Date() }
   };
+  if (input.sourceFile !== undefined) ev.sourceFile = input.sourceFile;
+  if (input.thumbnail !== undefined) ev.thumbnail = input.thumbnail;
+  return ev;
 }
 
 export function createMessage(input: {

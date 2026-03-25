@@ -222,10 +222,13 @@ async function reprocessPhotos(c: Case): Promise<void> {
       const file = files[i];
       statusEl.textContent = `Re-processing ${i + 1} of ${files.length}: ${file.name}…`;
 
+      const fileBase = file.name.replace(/\.[^.]+$/, '').toLowerCase();
+      const fileName = file.name.toLowerCase();
+      const filePath = ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).toLowerCase();
       const ev = photoItems.find((e) => {
+        if (e.sourceFile && e.sourceFile.toLowerCase() === filePath) return true;
         const stored = e.title.toLowerCase();
-        const incoming = file.name.replace(/\.[^.]+$/, '').toLowerCase();
-        return stored === incoming || stored === file.name.toLowerCase();
+        return stored === fileBase || stored === fileName;
       });
       if (!ev) continue;
 
@@ -234,6 +237,8 @@ async function reprocessPhotos(c: Case): Promise<void> {
         const ocrResult = await ocrService.extractText(file);
         const reclassified = classifyFromContent(ocrResult.text);
         const exifDate = await extractExifDate(file);
+        const thumb = await generateThumbnail(file);
+        const sourceName = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
 
         const updatedEv = {
           ...ev,
@@ -242,6 +247,8 @@ async function reprocessPhotos(c: Case): Promise<void> {
           category: reclassified?.category ?? ev.category,
           title: reclassified?.label ?? ev.title,
           dateTime: exifDate ?? ev.dateTime,
+          sourceFile: ev.sourceFile ?? sourceName,
+          ...(thumb ? { thumbnail: thumb } : {}),
           provenance: { ...ev.provenance, tier: ocrResult.tier, extractedAt: new Date() }
         };
 
@@ -536,10 +543,19 @@ function renderSourceFiles(c: Case): void {
       .slice(0, 3)
       .join('\n');
     const hasPreview = previewLines.length > 0;
+    const thumbHTML = ev.thumbnail
+      ? `<img src="${ev.thumbnail}" class="ev-thumb" alt="" />`
+      : `<span class="evidence-row__icon">${icon}</span>`;
+    const sourcePathHTML = ev.sourceFile
+      ? `<div class="ev-source-path" data-tip="${esc(ev.sourceFile)}">${esc(ev.sourceFile)}</div>`
+      : '';
     return `<div class="evidence-row-wrap" data-ev-id="${esc(ev.id)}">
       <div class="evidence-row" style="display:flex;align-items:center;gap:6px">
-        <span class="evidence-row__icon">${icon}</span>
-        <span class="evidence-row__name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</span>
+        ${thumbHTML}
+        <div style="flex:1;min-width:0">
+          <div class="evidence-row__name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</div>
+          ${sourcePathHTML}
+        </div>
         <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
         <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
         ${hasPreview ? `<button class="ocr-toggle" data-ev-id="${esc(ev.id)}" type="button" data-tip="Show OCR text">text ▸</button>` : ''}
@@ -632,11 +648,20 @@ function showEvidenceEditForm(ev: Evidence, caseId: string): void {
   const overlay = document.createElement('div');
   overlay.id = 'ev-edit-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
+  const thumbSection = ev.thumbnail
+    ? `<div style="margin-bottom:16px;text-align:center">
+        <img src="${ev.thumbnail}" style="max-width:100%;max-height:180px;border-radius:6px;border:1px solid #333;object-fit:contain" alt="Preview" />
+        ${ev.sourceFile ? `<div style="font-size:10px;color:#666;margin-top:4px;word-break:break-all">${esc(ev.sourceFile)}</div>` : ''}
+      </div>`
+    : ev.sourceFile
+      ? `<div style="font-size:10px;color:#666;margin-bottom:12px;word-break:break-all">📂 ${esc(ev.sourceFile)}</div>`
+      : '';
   overlay.innerHTML = `<div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:20px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <strong style="color:#e8e8e8;font-size:14px">Edit Evidence</strong>
       <button id="ev-edit-close" type="button" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1">×</button>
     </div>
+    ${thumbSection}
     ${field('TITLE', `<input id="ev-edit-title" type="text" value="${esc(ev.title)}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
     ${field('CATEGORY', `<select id="ev-edit-category" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">${catOptions}</select>`)}
     ${field('DATE', `<input id="ev-edit-date" type="date" value="${dateVal}" style="width:100%;box-sizing:border-box;background:#111;border:1px solid #333;color:#e8e8e8;padding:8px;border-radius:4px;font-size:14px">`)}
@@ -671,6 +696,31 @@ function showEvidenceEditForm(ev: Evidence, caseId: string): void {
 
 // ── File intake ────────────────────────────────────────────────────────────────
 
+async function generateThumbnail(file: File): Promise<string | null> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const MAX = 200;
+    const ratio = Math.min(MAX / bitmap.width, MAX / bitmap.height);
+    const w = Math.round(bitmap.width * ratio);
+    const h = Math.round(bitmap.height * ratio);
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.7 });
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp']);
+
 async function handleFiles(files: FileList | File[], _source: Case['source']): Promise<void> {
   const fileArr = Array.from(files);
   if (fileArr.length === 0) return;
@@ -682,6 +732,22 @@ async function handleFiles(files: FileList | File[], _source: Case['source']): P
       ocrService: buildOcrService(),
       source: _source,
     });
+
+    // Generate thumbnails for image files and attach to evidence
+    const imageFiles = fileArr.filter(f => {
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      return IMAGE_EXTS.has(ext);
+    });
+    for (const file of imageFiles) {
+      const sourceName = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      const ev = processed.evidence.find(e => e.sourceFile === sourceName);
+      if (!ev) continue;
+      const thumb = await generateThumbnail(file);
+      if (thumb) {
+        await repo.saveEvidence(processed.id, [{ ...ev, thumbnail: thumb }]);
+      }
+    }
+
     await loadHome();
     await openCase(processed.id);
     setIntakeStatus('');
