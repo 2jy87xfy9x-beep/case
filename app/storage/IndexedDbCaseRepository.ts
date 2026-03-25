@@ -149,6 +149,26 @@ export class IndexedDbCaseRepository implements CaseRepository {
     return items.map(({ caseId: _id, ...lawyer }) => lawyer as Lawyer);
   }
 
+  async listCases(): Promise<Case[]> {
+    const db = await this.openDb();
+    const caseRecords = await transactionValue<PersistedCase[]>(db, ['cases'], 'readonly', (tx) =>
+      tx.objectStore('cases').getAll() as IDBRequest<PersistedCase[]>
+    );
+
+    return Promise.all(
+      caseRecords.map(async (caseRecord) => {
+        const [evidence, messages, claims, legalNotes, lawyers] = await Promise.all([
+          this.listEvidence(caseRecord.id),
+          this.listMessages(caseRecord.id),
+          this.listClaims(caseRecord.id),
+          this.listLegalNotes(caseRecord.id),
+          this.listLawyers(caseRecord.id)
+        ]);
+        return deserializeCase(caseRecord, evidence, messages, claims, legalNotes, lawyers);
+      })
+    );
+  }
+
   private openDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, DB_VERSION);
