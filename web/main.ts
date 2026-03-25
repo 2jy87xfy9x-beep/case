@@ -438,15 +438,37 @@ function renderSourceFiles(c: Case): void {
     const date = isFinite(ev.dateTime.getTime())
       ? ev.dateTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : '—';
-    return `<div class="evidence-row" data-ev-id="${esc(ev.id)}" style="display:flex;align-items:center;gap:6px">
-      <span class="evidence-row__icon">${icon}</span>
-      <span class="evidence-row__name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</span>
-      <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
-      <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
-      <button class="ev-edit-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Edit" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0">✏</button>
-      <button class="ev-delete-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Delete" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">×</button>
+    const previewLines = ev.body
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .slice(0, 3)
+      .join('\n');
+    const hasPreview = previewLines.length > 0;
+    return `<div class="evidence-row-wrap" data-ev-id="${esc(ev.id)}">
+      <div class="evidence-row" style="display:flex;align-items:center;gap:6px">
+        <span class="evidence-row__icon">${icon}</span>
+        <span class="evidence-row__name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ev.title)}</span>
+        <span class="evidence-row__tag">${esc(ev.category ?? '—')}</span>
+        <span style="font-size:10px;color:#bbb;flex-shrink:0">${esc(date)}</span>
+        ${hasPreview ? `<button class="ocr-toggle" data-ev-id="${esc(ev.id)}" type="button" data-tip="Show OCR text">text ▸</button>` : ''}
+        <button class="ev-edit-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Edit" style="background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:2px 4px;flex-shrink:0">✏</button>
+        <button class="ev-delete-btn" data-ev-id="${esc(ev.id)}" type="button" data-tip="Delete" style="background:none;border:none;color:#666;cursor:pointer;font-size:16px;padding:2px 4px;flex-shrink:0">×</button>
+      </div>
+      ${hasPreview ? `<div class="ocr-preview" id="ocr-preview-${esc(ev.id)}">${esc(previewLines)}</div>` : ''}
     </div>`;
   }).join('') || '<p class="lib-empty">No source files.</p>';
+
+  list.querySelectorAll('.ocr-toggle').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const evId = (btn as HTMLElement).dataset.evId!;
+      const preview = document.getElementById(`ocr-preview-${evId}`);
+      if (!preview) return;
+      const showing = preview.classList.toggle('visible');
+      (btn as HTMLElement).textContent = showing ? 'text ▾' : 'text ▸';
+    });
+  });
 
   list.querySelectorAll('.ev-edit-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {

@@ -976,3 +976,25 @@ body {
 .app-confirm-ok.danger:hover { background: #a93226; }
 .app-confirm-ok.neutral { background: #555; }
 .app-confirm-ok.neutral:hover { background: #333; }
+
+/* ── OCR text preview ──────────────────────────────────────────────────── */
+.ocr-preview {
+  font-size: 11px;
+  color: #888;
+  font-family: monospace;
+  line-height: 1.5;
+  padding: 6px 8px;
+  background: #f9f9f9;
+  border-left: 2px solid #e0e0e0;
+  margin: 4px 0 4px 24px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: none;
+}
+.ocr-preview.visible { display: block; }
+.ocr-toggle {
+  background: none; border: none; color: #aaa;
+  font-size: 10px; cursor: pointer; padding: 0 4px;
+  letter-spacing: 0.05em; flex-shrink: 0;
+}
+.ocr-toggle:hover { color: #555; }
