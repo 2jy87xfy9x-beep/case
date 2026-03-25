@@ -36,7 +36,16 @@
       "Bash(wmic process:*)",
       "Bash(git merge feature/phase-15-e2e --no-ff -m \"feat\\(phase-15\\): Playwright E2E tests for v2 UI screens:*)",
       "Bash(git worktree:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Read(//c/Users/Folma/Downloads/Phone Link/case_docs/**)",
+      "Read(//mnt/c/Users/Folma/Downloads/Phone Link/**)",
+      "Bash(xargs wc:*)",
+      "Bash(npm run:*)",
+      "Bash(npm list:*)",
+      "Bash(node -e \"import\\(''''tesseract.js''''\\).then\\(m => console.log\\(Object.keys\\(m\\)\\)\\)\")",
+      "Bash(grep -n \"topbar__sync\\\\|sync-dot\\\\|\\\\.sync\" /c/case/web/index.html /c/case/web/*.css)",
+      "Bash(git push:*)",
+      "Bash(C:/case/web/styles.css:*)"
     ]
   }
 }
