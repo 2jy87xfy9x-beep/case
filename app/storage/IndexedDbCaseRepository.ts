@@ -1,8 +1,10 @@
-import type { Case, Claim, Evidence, LegalNote, Lawyer, Message } from '../domain/types.js';
+import type { Case, Claim, Evidence, Gap, LegalNote, Lawyer, Message, TimelineItem } from '../domain/types.js';
 import type { CaseRepository } from '../ports/CaseRepository.js';
 
-type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes'> & {
+type PersistedCase = Omit<Case, 'lastExportedAt' | 'evidence' | 'messages' | 'claims' | 'legalNotes' | 'tenancy' | 'timeline'> & {
   lastExportedAt: string | null;
+  tenancy?: { startDate: string | null; monthlyRentOriginal: number | null; monthlyRentCurrent: number | null };
+  timeline?: unknown[]; // stored as-is but treated as transient; rebuilt from evidence/messages on load
 };
 
 type PersistedEvidence = Omit<Evidence, 'dateTime' | 'provenance'> & {
@@ -24,7 +26,7 @@ type PersistedClaim = Claim & { caseId: string };
 type PersistedLegalNote = LegalNote & { caseId: string };
 type PersistedLawyer = Lawyer & { caseId: string };
 
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export class IndexedDbCaseRepository implements CaseRepository {
   constructor(private readonly dbName = 'case-organizer') {}
@@ -201,6 +203,9 @@ export class IndexedDbCaseRepository implements CaseRepository {
             cursor.continue();
           };
         }
+
+        // v5: all new Case fields are optional — no data transformation needed
+        // existing records remain valid as-is
       };
 
       request.onsuccess = () => resolve(request.result);
@@ -210,11 +215,30 @@ export class IndexedDbCaseRepository implements CaseRepository {
 }
 
 function serializeCase(caseData: Case): PersistedCase {
-  return {
+  const persisted: PersistedCase = {
     id: caseData.id,
     title: caseData.title,
-    lastExportedAt: caseData.lastExportedAt ? caseData.lastExportedAt.toISOString() : null
+    lastExportedAt: caseData.lastExportedAt ? caseData.lastExportedAt.toISOString() : null,
+    lawyers: caseData.lawyers
   };
+  // v2 optional fields — only include when present
+  if (caseData.parties !== undefined) persisted.parties = caseData.parties;
+  if (caseData.property !== undefined) persisted.property = caseData.property;
+  if (caseData.tenancy !== undefined) {
+    persisted.tenancy = {
+      ...caseData.tenancy,
+      startDate: caseData.tenancy.startDate instanceof Date
+        ? caseData.tenancy.startDate.toISOString()
+        : caseData.tenancy.startDate,
+    };
+  }
+  if (caseData.clientGoal !== undefined) persisted.clientGoal = caseData.clientGoal;
+  if (caseData.status !== undefined) persisted.status = caseData.status;
+  if (caseData.source !== undefined) persisted.source = caseData.source;
+  if (caseData.timeline !== undefined) persisted.timeline = caseData.timeline;
+  if (caseData.gaps !== undefined) persisted.gaps = caseData.gaps;
+  if (caseData.libraryRefs !== undefined) persisted.libraryRefs = caseData.libraryRefs;
+  return persisted;
 }
 
 function deserializeCase(
@@ -225,7 +249,7 @@ function deserializeCase(
   legalNotes: LegalNote[],
   lawyers: Lawyer[]
 ): Case {
-  return {
+  const result: Case = {
     id: caseData.id,
     title: caseData.title,
     lastExportedAt: caseData.lastExportedAt ? new Date(caseData.lastExportedAt) : null,
@@ -235,6 +259,26 @@ function deserializeCase(
     legalNotes,
     lawyers
   };
+  // v2 optional fields — restore when present
+  if (caseData.parties !== undefined) result.parties = caseData.parties;
+  if (caseData.property !== undefined) result.property = caseData.property;
+  if (caseData.tenancy !== undefined) {
+    result.tenancy = {
+      ...caseData.tenancy,
+      startDate: caseData.tenancy.startDate != null
+        ? new Date(caseData.tenancy.startDate)
+        : null,
+    };
+  }
+  if (caseData.clientGoal !== undefined) result.clientGoal = caseData.clientGoal;
+  if (caseData.status !== undefined) result.status = caseData.status;
+  if (caseData.source !== undefined) result.source = caseData.source;
+  // timeline is a transient/derived field — stored for caching but treated as untrusted on load.
+  // Phase 12 will rebuild it from evidence and messages via buildTimeline().
+  if (caseData.timeline !== undefined) result.timeline = caseData.timeline as TimelineItem[];
+  if (caseData.gaps !== undefined) result.gaps = caseData.gaps as Gap[];
+  if (caseData.libraryRefs !== undefined) result.libraryRefs = caseData.libraryRefs;
+  return result;
 }
 
 function serializeEvidence(caseId: string, evidence: Evidence): PersistedEvidence {
