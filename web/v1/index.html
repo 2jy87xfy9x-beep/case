@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2d5a3d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Case" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Case Organizer</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="appbar">
+      <h1 class="appbar__title">Case Organizer</h1>
+      <p id="status" class="appbar__status" role="status"></p>
+    </header>
+
+    <main class="screens" id="main-screens">
+
+      <!-- ── INBOX ─────────────────────────────────────────────────── -->
+      <section id="screen-inbox" class="screen" aria-labelledby="inbox-heading">
+        <h2 id="inbox-heading" class="sr-only">Inbox</h2>
+
+        <!-- Getting started orientation -->
+        <details class="card getting-started" id="getting-started">
+          <summary class="getting-started__toggle">
+            <span class="getting-started__icon" aria-hidden="true">📋</span>
+            <strong>How to use this app</strong>
+            <span class="getting-started__hint">Follow these steps in order</span>
+          </summary>
+          <ol class="getting-started__steps">
+            <li><strong>Inbox</strong> — Add evidence (documents, notes, images) and import text messages.</li>
+            <li><strong>Timeline</strong> — See all items in date order. Tie events to evidence and spot gaps.</li>
+            <li><strong>Evidence</strong> — Browse, categorise, and review each item; confirm OCR text is correct.</li>
+            <li><strong>Review</strong> — See suggested gaps in your case. Mark what to ask your lawyer about.</li>
+            <li><strong>Lawyer</strong> — Record topics to discuss and research notes to bring to your consultation.</li>
+            <li><strong>Export</strong> — Download your case as a Markdown file or backup to share with counsel.</li>
+          </ol>
+          <p class="getting-started__note">
+            <strong>Not legal advice.</strong> This app helps you <em>organise</em> materials — it does not tell you what will win in court or substitute for a lawyer.
+          </p>
+        </details>
+
+        <div id="export-reminder" class="banner banner--warning banner--hidden" role="note">
+          <span id="export-reminder-text"></span>
+          <button type="button" id="btn-reminder-dismiss" class="banner__dismiss" aria-label="Dismiss reminder">✕</button>
+        </div>
+
+        <!-- Add evidence form -->
+        <div class="card">
+          <h3 class="card__heading">Add evidence</h3>
+          <form id="add-evidence-form" novalidate>
+            <label class="field">
+              <span class="field__label">Title <span class="required" aria-hidden="true">*</span></span>
+              <input id="ev-title" type="text" autocomplete="off" placeholder="e.g. Rent increase email, Feb 2025" required />
+            </label>
+            <label class="field">
+              <span class="field__label">Date (optional)</span>
+              <input id="ev-date" type="date" />
+            </label>
+            <label class="field">
+              <span class="field__label">Attach image (optional)</span>
+              <input id="ev-image" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" />
+              <span class="field__hint">Attaches the image name and date. Type the extracted text below.</span>
+            </label>
+            <label class="field">
+              <span class="field__label">Text / description</span>
+              <textarea id="ev-body" rows="4" placeholder="Paste or type extracted text, or describe the document."></textarea>
+            </label>
+            <button type="submit" class="btn btn--primary">Add to case</button>
+          </form>
+        </div>
+
+        <!-- Import messages -->
+        <div class="card">
+          <h3 class="card__heading">Import text messages</h3>
+          <details class="import-config">
+            <summary class="import-config__toggle">Sender attribution (optional)</summary>
+            <div class="import-config__body">
+              <label class="field">
+                <span class="field__label">Your name / number in the export</span>
+                <input id="cfg-own" type="text" placeholder="e.g. Me, +1 555 000 0000" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span class="field__label">Landlord's name / number in the export</span>
+                <input id="cfg-landlord" type="text" placeholder="e.g. Bob Smith, +1 555 111 1111" autocomplete="off" />
+              </label>
+            </div>
+          </details>
+          <div class="import-row">
+            <label class="btn import-btn">
+              iMazing CSV
+              <input type="file" id="import-csv" accept=".csv" hidden />
+            </label>
+            <label class="btn import-btn">
+              SMS Backup XML
+              <input type="file" id="import-xml" accept=".xml" hidden />
+            </label>
+          </div>
+          <p id="import-result" class="import-result" role="status" aria-live="polite"></p>
+        </div>
+
+        <!-- Batch import images -->
+        <div class="card">
+          <h3 class="card__heading">Batch import images</h3>
+          <p class="muted" style="margin-bottom:0.75rem">Point to a folder of images and the app will create an evidence entry for each one. You can review and edit each item afterwards.</p>
+          <div class="import-row">
+            <label class="btn import-btn">
+              Select folder
+              <input type="file" id="import-folder" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" webkitdirectory hidden />
+            </label>
+            <label class="btn import-btn">
+              Select images
+              <input type="file" id="import-images" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden />
+            </label>
+          </div>
+          <p id="batch-import-result" class="import-result" role="status" aria-live="polite"></p>
+        </div>
+
+        <!-- Needs review -->
+        <div class="card" id="unreviewed-card">
+          <h3 class="card__heading">Needs review <span id="unreviewed-count" class="badge"></span></h3>
+          <ul id="unreviewed-list" class="item-list"></ul>
+          <p id="unreviewed-empty" class="muted" aria-live="polite">All items reviewed.</p>
+        </div>
+      </section>
+
+      <!-- ── TIMELINE ───────────────────────────────────────────────── -->
+      <section id="screen-timeline" class="screen screen--hidden" aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading" class="sr-only">Timeline</h2>
+        <div class="card">
+          <h3 class="card__heading">Timeline <span id="timeline-count" class="badge"></span></h3>
+          <ul id="timeline-list" class="timeline-list"></ul>
+          <p id="timeline-empty" class="muted">No items yet. Add evidence or import messages in Inbox.</p>
+        </div>
+      </section>
+
+      <!-- ── EVIDENCE ───────────────────────────────────────────────── -->
+      <section id="screen-evidence" class="screen screen--hidden" aria-labelledby="evidence-heading">
+        <h2 id="evidence-heading" class="sr-only">Evidence</h2>
+        <div class="evidence-layout">
+          <div class="card">
+            <h3 class="card__heading">Evidence <span id="evidence-count" class="badge"></span></h3>
+            <ul id="evidence-list" class="item-list"></ul>
+            <p id="evidence-empty" class="muted">No evidence yet. Add items in Inbox.</p>
+          </div>
+
+          <div class="card card--detail" id="evidence-detail-card">
+            <h3 class="card__heading">Detail</h3>
+            <p id="detail-empty" class="muted">Select an evidence item.</p>
+            <div id="detail-body" class="detail-body detail-body--hidden">
+              <p class="detail__title" id="detail-title"></p>
+              <p class="muted detail__meta" id="detail-meta"></p>
+
+              <div id="ocr-warning" class="inline-warning inline-warning--hidden" role="alert">
+                <strong>Review required.</strong> Text was extracted automatically and may contain errors.
+                Please review carefully before relying on it.
+              </div>
+
+              <label class="field">
+                <span class="field__label">Category</span>
+                <select id="detail-category" aria-label="Evidence category"></select>
+              </label>
+
+              <pre id="detail-text" class="detail-text"></pre>
+
+              <button type="button" id="btn-confirm-review" class="btn btn--sm btn--confirm" aria-label="Mark text as reviewed">
+                Mark reviewed ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── GAPS ───────────────────────────────────────────────────── -->
+      <section id="screen-gaps" class="screen screen--hidden" aria-labelledby="gaps-heading">
+        <h2 id="gaps-heading" class="sr-only">Review issues</h2>
+        <div class="card">
+          <h3 class="card__heading">Review issues <span id="gaps-badge" class="badge"></span></h3>
+          <p class="muted gaps-intro">
+            Items below suggest documents that may strengthen your case. These are not legal
+            conclusions — only organisational observations based on what you have added.
+            Use this screen to identify what to ask your lawyer about.
+          </p>
+          <ul id="gaps-list" class="gaps-list"></ul>
+          <p id="gaps-empty" class="muted">No gaps detected. Your case looks complete.</p>
+        </div>
+      </section>
+
+      <!-- ── LAW ───────────────────────────────────────────────────────── -->
+      <section id="screen-law" class="screen screen--hidden" aria-labelledby="law-heading">
+        <h2 id="law-heading" class="sr-only">Prepare for a lawyer</h2>
+
+        <div class="card">
+          <p class="law-disclaimer" role="note">
+            Use this screen to prepare for your lawyer consultation. Record topics you want
+            to discuss and notes from your own research. These are <em>your</em> questions
+            and observations — not legal conclusions from the app.
+          </p>
+        </div>
+
+        <!-- Topics to discuss -->
+        <div class="card">
+          <h3 class="card__heading">Topics to discuss <span id="claims-count" class="badge"></span></h3>
+          <ul id="claims-list" class="item-list law-list"></ul>
+          <p id="claims-empty" class="muted">No topics yet. Add one below.</p>
+
+          <div id="claim-detail" class="claim-detail" hidden>
+            <div id="claim-detail-body"></div>
+            <div class="add-question-row field">
+              <input id="claim-question-input" type="text" placeholder="Add a question to ask your lawyer" autocomplete="off" />
+              <button type="button" id="btn-add-claim-question" class="btn btn--sm">Add</button>
+            </div>
+          </div>
+
+          <details class="add-form-toggle">
+            <summary class="add-form-toggle__label">Add a topic</summary>
+            <form id="add-claim-form" class="add-form" novalidate>
+              <label class="field">
+                <span class="field__label">Topic title <span class="required" aria-hidden="true">*</span></span>
+                <input id="claim-title" type="text" autocomplete="off" placeholder="e.g. Late fee — above legal cap" required />
+              </label>
+              <label class="field">
+                <span class="field__label">Description (your words)</span>
+                <textarea id="claim-desc" rows="3" placeholder="What happened? What are you unsure about?"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Status</span>
+                <select id="claim-status">
+                  <option value="researching">Researching</option>
+                  <option value="ready-to-discuss">Ready to discuss</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dropped">Dropped</option>
+                </select>
+              </label>
+              <button type="submit" class="btn btn--primary">Save topic</button>
+            </form>
+          </details>
+        </div>
+
+        <!-- Research notes -->
+        <div class="card">
+          <h3 class="card__heading">Research notes <span id="notes-count" class="badge"></span></h3>
+          <p class="muted" style="margin-bottom:10px">Notes on what <em>you</em> have read or learned. The app does not generate these.</p>
+          <ul id="notes-list" class="item-list law-list"></ul>
+          <p id="notes-empty" class="muted">No notes yet.</p>
+
+          <details class="add-form-toggle">
+            <summary class="add-form-toggle__label">Add a research note</summary>
+            <form id="add-note-form" class="add-form" novalidate>
+              <label class="field">
+                <span class="field__label">Topic <span class="required" aria-hidden="true">*</span></span>
+                <input id="note-topic" type="text" autocomplete="off" placeholder="e.g. Late fee caps in this state" required />
+              </label>
+              <label class="field">
+                <span class="field__label">Summary (your words)</span>
+                <textarea id="note-summary" rows="3" placeholder="What did you learn?"></textarea>
+              </label>
+              <label class="field">
+                <span class="field__label">Source (URL or citation)</span>
+                <input id="note-source" type="text" autocomplete="off" placeholder="e.g. tenant-rights.org/late-fees" />
+              </label>
+              <label class="field">
+                <span class="field__label">Applies to this case?</span>
+                <select id="note-applies">
+                  <option value="maybe">Maybe</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              <button type="submit" class="btn btn--primary">Save note</button>
+            </form>
+          </details>
+        </div>
+      </section>
+
+      <!-- ── EXPORT ─────────────────────────────────────────────────── -->
+      <section id="screen-export" class="screen screen--hidden" aria-labelledby="export-heading">
+        <h2 id="export-heading" class="sr-only">Export</h2>
+
+        <div id="export-reminder-export" class="banner banner--warning banner--hidden" role="note">
+          <span id="export-reminder-export-text"></span>
+        </div>
+
+        <div class="card">
+          <h3 class="card__heading">Export case</h3>
+          <p class="muted">Download your case as a Markdown file to share with a lawyer or save a backup.</p>
+
+          <p class="last-exported" id="last-exported-label"></p>
+
+          <div class="export-actions">
+            <button type="button" id="btn-export-full" class="btn btn--primary">
+              Full case (.md)
+            </button>
+            <button type="button" id="btn-export-summary" class="btn">
+              Lawyer summary (.md)
+            </button>
+          </div>
+
+          <div class="disclaimer">
+            <strong>Text only.</strong> Original documents remain on your device and are the
+            authoritative source. This export contains extracted or manually entered text only.
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card__heading">Move to another device</h3>
+          <p class="muted">Download a backup of all case data (text, messages, notes, lawyers) to open on another device. Original image files are not included — re-upload them after restoring.</p>
+
+          <div class="export-actions">
+            <button type="button" id="btn-backup-download" class="btn btn--primary">
+              Download backup (.json)
+            </button>
+            <label class="btn" id="lbl-backup-restore">
+              Restore from backup
+              <input type="file" id="inp-backup-restore" accept=".json" class="sr-only" />
+            </label>
+          </div>
+
+          <div id="backup-restore-status" class="muted" aria-live="polite"></div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom navigation -->
+    <nav class="bottom-nav" aria-label="App navigation">
+      <button class="nav-btn nav-btn--active" data-tab="inbox" type="button">
+        <span class="nav-icon" aria-hidden="true">📥</span>
+        <span class="nav-label">Inbox</span>
+      </button>
+      <button class="nav-btn" data-tab="timeline" type="button">
+        <span class="nav-icon" aria-hidden="true">📅</span>
+        <span class="nav-label">Timeline</span>
+      </button>
+      <button class="nav-btn" data-tab="evidence" type="button">
+        <span class="nav-icon" aria-hidden="true">📁</span>
+        <span class="nav-label">Evidence</span>
+      </button>
+      <button class="nav-btn" data-tab="gaps" type="button" id="nav-btn-gaps">
+        <span class="nav-icon" aria-hidden="true">🔍</span>
+        <span class="nav-label">Review <span id="nav-gaps-badge" class="nav-badge" aria-label="gaps detected"></span></span>
+      </button>
+      <button class="nav-btn" data-tab="law" type="button">
+        <span class="nav-icon" aria-hidden="true">⚖️</span>
+        <span class="nav-label">Lawyer</span>
+      </button>
+      <button class="nav-btn" data-tab="export" type="button">
+        <span class="nav-icon" aria-hidden="true">📤</span>
+        <span class="nav-label">Export</span>
+      </button>
+    </nav>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>
