@@ -835,6 +835,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('consult-exit-btn')!.addEventListener('click', closeConsult);
   document.getElementById('consult-prev-btn')!.addEventListener('click', prevSlide);
   document.getElementById('consult-next-btn')!.addEventListener('click', nextSlide);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeConsult();
+  });
 
   document.querySelectorAll('.nav-dot').forEach((dot, i) => {
     dot.addEventListener('click', () => {
