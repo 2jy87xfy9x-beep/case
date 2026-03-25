@@ -12,6 +12,7 @@ import { suggestClaims } from '../domain/claimSuggester.js';
 import type { Case, Evidence, EvidenceCategory } from '../domain/types.js';
 import type { CaseRepository } from '../ports/CaseRepository.js';
 import type { OcrService } from '../ports/OcrService.js';
+import { extractExifDate } from './extractExifDate.js';
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -282,6 +283,12 @@ export async function autoProcess(
     }
 
     const meta = extractMeta(file.name, body);
+
+    // EXIF date fallback for photos when text extraction found no date
+    if (meta.date === null && PHOTO_EXTS.has(extOf(file.name))) {
+      meta.date = await extractExifDate(file);
+    }
+
     allMetas.push(meta);
 
     const ev = createEvidence({

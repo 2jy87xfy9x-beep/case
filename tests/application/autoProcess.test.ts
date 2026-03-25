@@ -313,21 +313,21 @@ describe('autoProcess() integration', () => {
     expect(ocrService.extractText).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call OCR service for photo files', async () => {
+  it('calls OCR service for photo files (photos are OCR-processed to extract text)', async () => {
     const repo = makeMockRepo();
     const ocrService: OcrService = {
       extractText: vi.fn().mockResolvedValue({
         text: '',
-        tier: 'manual',
-        requiresUserReview: false,
-        confidence: 'high',
+        tier: 'tesseract',
+        requiresUserReview: true,
+        confidence: 'low',
         extractedAt: new Date()
       }),
       isAvailable: () => true
     };
     const files = [makeFile('photo.jpg', 'image/jpeg')];
     await autoProcess(files, { existingCases: [], repo, ocrService });
-    expect(ocrService.extractText).not.toHaveBeenCalled();
+    expect(ocrService.extractText).toHaveBeenCalledOnce();
   });
 
   it('does not call OCR service for message files', async () => {
