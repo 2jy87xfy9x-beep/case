@@ -7,12 +7,15 @@
 
 import { autoProcess } from '../app/application/autoProcess.js';
 import { exportCaseMarkdown } from '../app/application/exportCase.js';
+import { importScreenshotOcr } from '../app/application/importScreenshotOcr.js';
 import { createCase } from '../app/domain/factories.js';
 import { buildTimeline } from '../app/domain/timeline.js';
 import { detectGaps } from '../app/domain/gapDetector.js';
 import { parseImazingCsv } from '../app/messages/parsers/imazingCsv.js';
 import { parseSmsXml } from '../app/messages/parsers/smsXml.js';
 import { IndexedDbCaseRepository } from '../app/storage/IndexedDbCaseRepository.js';
+import { TieredOcrService } from '../app/ocr/tiered/index.js';
+import { TesseractOcrService } from '../app/ocr/tesseract/index.js';
 import type { Case, Gap, TimelineItem } from '../app/domain/types.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
@@ -436,6 +439,59 @@ async function handleMessageImport(file: File): Promise<void> {
   }
 }
 
+async function handleScreenshotImport(file: File): Promise<void> {
+  const resultEl = document.getElementById('import-result')!;
+  try {
+    // Ensure we have a case to attach the message to
+    let targetCase = currentCase;
+    if (!targetCase) {
+      targetCase = createCase({ title: 'Imported Messages' });
+      await repo.saveCase(targetCase);
+    }
+
+    const caseId = targetCase.id;
+
+    // Wrap the IndexedDb repo to match the MessageRepository port (no caseId param)
+    const messageRepo = {
+      async saveMessages(messages: import('../app/domain/types.js').Message[]) {
+        await repo.saveMessages(caseId, messages);
+      },
+      async getDedupHashes() {
+        return new Set<string>();
+      }
+    };
+
+    // Build a tiered OCR service — Tesseract.js tier when available; falls back
+    // to a stub that marks the message for user review so the body can be filled in.
+    const stubOcr: import('../app/ports/OcrService.js').OcrService = {
+      isAvailable() { return true; },
+      async extractText(_f: File) {
+        return {
+          text: '',
+          tier: 'tesseract' as const,
+          confidence: 'unknown' as const,
+          requiresUserReview: true,
+          extractedAt: new Date()
+        };
+      }
+    };
+    const ocrService = new TieredOcrService({ tesseract: new TesseractOcrService({ recognize: () => stubOcr.extractText(file).then(r => ({ text: r.text, confidence: 0.5 })) }) });
+
+    const { message } = await importScreenshotOcr({
+      file,
+      threadId: caseId,
+      ocrService,
+      repo: messageRepo
+    });
+
+    resultEl.textContent = `Screenshot imported — message requires review (body: "${message.body.slice(0, 60) || '(empty — edit to add text)'}").`;
+    await loadHome();
+    await openCase(caseId);
+  } catch (err) {
+    resultEl.textContent = `Screenshot import failed: ${String(err)}`;
+  }
+}
+
 // ── Consultation overlay ──────────────────────────────────────────────────────
 
 function openConsult(): void {
@@ -807,6 +863,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('import-xml')!.addEventListener('change', (e) => {
     const file = ((e.target as HTMLInputElement).files)?.[0];
     if (file) handleMessageImport(file);
+  });
+
+  // ── Screenshot import (OCR path)
+  document.getElementById('import-screenshot')!.addEventListener('change', (e) => {
+    const file = ((e.target as HTMLInputElement).files)?.[0];
+    if (file) handleScreenshotImport(file);
   });
 
   // ── Manual entry button

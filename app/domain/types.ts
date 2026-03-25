@@ -10,6 +10,8 @@ export interface Message {
   direction: MessageDirection;
   body: string;
   importSource: MessageImportSource;
+  /** True when the message body was produced by OCR and needs human verification. */
+  requiresUserReview: boolean;
   tags: string[];
   notes: string;
 }

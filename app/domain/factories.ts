@@ -38,6 +38,7 @@ export function createMessage(input: {
   direction: MessageDirection;
   body: string;
   importSource: MessageImportSource;
+  requiresUserReview?: boolean;
   tags?: string[];
   notes?: string;
   id?: string;
@@ -50,6 +51,7 @@ export function createMessage(input: {
     direction: input.direction,
     body: input.body,
     importSource: input.importSource,
+    requiresUserReview: input.requiresUserReview ?? false,
     tags: input.tags ?? [],
     notes: input.notes ?? ''
   };
