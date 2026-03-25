@@ -59,6 +59,10 @@ class InMemoryCaseRepository implements CaseRepository {
   async listLawyers(caseId: string): Promise<Lawyer[]> {
     return structuredClone(this.lawyers.get(caseId) ?? []);
   }
+
+  async listCases(): Promise<Case[]> {
+    return structuredClone(Array.from(this.cases.values()));
+  }
 }
 
 describe('CaseRepository port behavior with in-memory fake', () => {
@@ -354,6 +358,93 @@ describe('IndexedDbCaseRepository smoke', () => {
     // startDate should be a Date instance
     expect(loaded?.tenancy?.startDate).toBeInstanceOf(Date);
     expect(loaded?.tenancy?.startDate?.toISOString().startsWith('2024')).toBe(true);
+  });
+});
+
+describe('listCases() — in-memory fake (port contract)', () => {
+  it('returns empty array when no cases have been saved', async () => {
+    const repo = new InMemoryCaseRepository();
+    const result = await repo.listCases();
+    expect(result).toEqual([]);
+  });
+
+  it('returns the saved case after saveCase()', async () => {
+    const repo = new InMemoryCaseRepository();
+    const caseA = createCase({ id: 'list-a', title: 'Case A' });
+    await repo.saveCase(caseA);
+    const result = await repo.listCases();
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('list-a');
+    expect(result[0].title).toBe('Case A');
+  });
+
+  it('returns all saved cases (multiple)', async () => {
+    const repo = new InMemoryCaseRepository();
+    const caseA = createCase({ id: 'list-a', title: 'Case A' });
+    const caseB = createCase({ id: 'list-b', title: 'Case B' });
+    await repo.saveCase(caseA);
+    await repo.saveCase(caseB);
+    const result = await repo.listCases();
+    expect(result).toHaveLength(2);
+    const ids = result.map((c) => c.id).sort();
+    expect(ids).toEqual(['list-a', 'list-b']);
+  });
+});
+
+describe('listCases() — IndexedDbCaseRepository (fake-indexeddb)', () => {
+  async function loadFakeIndexedDb() {
+    let fakeIndexedDb: typeof import('fake-indexeddb') | null = null;
+    try {
+      fakeIndexedDb = await import('fake-indexeddb');
+    } catch {
+      return null;
+    }
+    return fakeIndexedDb;
+  }
+
+  it('returns empty array on a fresh database', async () => {
+    const fakeIndexedDb = await loadFakeIndexedDb();
+    if (!fakeIndexedDb) { expect(true).toBe(true); return; }
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = fakeIndexedDb.indexedDB;
+
+    const dbName = `test-listcases-empty-${Date.now()}`;
+    const repo = new IndexedDbCaseRepository(dbName);
+    const result = await repo.listCases();
+    expect(result).toEqual([]);
+  });
+
+  it('returns the single saved case', async () => {
+    const fakeIndexedDb = await loadFakeIndexedDb();
+    if (!fakeIndexedDb) { expect(true).toBe(true); return; }
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = fakeIndexedDb.indexedDB;
+
+    const dbName = `test-listcases-single-${Date.now()}`;
+    const repo = new IndexedDbCaseRepository(dbName);
+    const caseA = createCase({ id: 'idb-a', title: 'IDB Case A' });
+    await repo.saveCase(caseA);
+
+    const result = await repo.listCases();
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('idb-a');
+    expect(result[0].title).toBe('IDB Case A');
+  });
+
+  it('returns all cases when multiple are saved', async () => {
+    const fakeIndexedDb = await loadFakeIndexedDb();
+    if (!fakeIndexedDb) { expect(true).toBe(true); return; }
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = fakeIndexedDb.indexedDB;
+
+    const dbName = `test-listcases-multi-${Date.now()}`;
+    const repo = new IndexedDbCaseRepository(dbName);
+    const caseA = createCase({ id: 'idb-multi-a', title: 'Multi A' });
+    const caseB = createCase({ id: 'idb-multi-b', title: 'Multi B' });
+    await repo.saveCase(caseA);
+    await repo.saveCase(caseB);
+
+    const result = await repo.listCases();
+    expect(result).toHaveLength(2);
+    const ids = result.map((c) => c.id).sort();
+    expect(ids).toEqual(['idb-multi-a', 'idb-multi-b']);
   });
 });
 
