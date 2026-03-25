@@ -1,5 +1,35 @@
 import { randomUUID } from 'node:crypto';
-import type { Case, Lawyer, Message, MessageDirection, MessageImportSource, MessageSender } from './types.js';
+import type {
+  Case,
+  Evidence,
+  EvidenceCategory,
+  Lawyer,
+  Message,
+  MessageDirection,
+  MessageImportSource,
+  MessageSender,
+  OcrMethod
+} from './types.js';
+
+export function createEvidence(input: {
+  id?: string;
+  title: string;
+  body?: string;
+  dateTime?: Date;
+  category?: EvidenceCategory;
+  requiresUserReview?: boolean;
+  provenance?: { tier: OcrMethod; extractedAt: Date; engineVersion?: string };
+}): Evidence {
+  return {
+    id: input.id ?? randomUUID(),
+    title: input.title,
+    body: input.body ?? '',
+    dateTime: input.dateTime ?? new Date(NaN),
+    category: input.category,
+    requiresUserReview: input.requiresUserReview ?? false,
+    provenance: input.provenance ?? { tier: 'manual', extractedAt: new Date() }
+  };
+}
 
 export function createMessage(input: {
   threadId: string;
